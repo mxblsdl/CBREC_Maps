@@ -1,0 +1,222 @@
+---
+title: "CBREC LCA Analysis of Timber Harvest Projects from 2016 - 2019"
+author: "Max Blasdel"
+date: "August 11, 2020"
+output:
+  html_document: default
+---
+
+# Purpose
+Create final maps from CBREC outputs for use in results report
+  
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = F)
+knitr::opts_chunk$set(include = F)
+
+options(scipen = 10)
+
+knitr::opts_knit$set(root.dir = rprojroot::find_rstudio_root_file())
+```
+
+# Setup
+Load libraries and helper functions
+
+Set user defined variables
+```{r results='hide'}
+source("R/CBI_postFunctions.R")
+source("R/CBI_filterHarvests.R")
+
+library(data.table) # data structure
+library(tictoc) # time test
+library(praise) # why not?
+library(tidyverse)
+library(ggridges) # additional ridge plotting
+library(ggplot2) # plotting
+library(sf)
+```
+
+Define helper functions
+```{r include=TRUE}
+"%notin%" <- function(x, table) match(x, table, nomatch = 0) == 0
+
+# bind data into data table function; works with specific list structure of outputs
+bindDataTable <- function(data) {
+  require(data.table)
+  tr <-
+    lapply(data, function(d) {
+      # simplify list structure
+      d <- unlist(d, recursive = F)
+      # bind together as data table
+      d <- rbindlist(d)
+      return(d)
+    })
+  return(tr)
+}
+
+## ggplot theme
+mxblsdl <- theme_minimal(base_size = 12) +
+  theme(legend.position = "bottom",
+        #legend.title = element_blank(),
+        strip.text = element_text(size = 12),
+        axis.text = element_text(size = 12),
+        legend.text = element_text(size = 12))
+
+# set the theme for all plots
+theme_set(mxblsdl)
+```
+
+# Load Data
+
+First find the model results which are classified by the 'metric', either kWh or MT Recovered.
+```{r include=TRUE}
+# find all results files
+files <- dir("CBREC_Model_Output/kWh", full.names = T, recursive = T)
+length(files)
+# find files which are larger than a certain size and have data
+```
+
+Optional code below in case we need to filter out really small values... Not sure if this will be needed in the long run
+```{r include=TRUE}
+## create empty list
+good_files <- list()
+
+for (i in 1:length(files)) {
+  # save file paths based on criteria 
+  if(1000 < file.size(files[i])) {
+  good_files[[i]] <- files[i]
+  }
+}
+
+# filter out null values
+good_files <- Filter(length, good_files)
+
+# clean up
+rm(files)
+
+# extract polygon names
+polys <- tools::file_path_sans_ext(gsub(".*/", "", unlist(good_files)))
+```
+
+Spatial Data
+These are timber harvests from all years
+
+```{r}
+sf_path <- dir("CBREC-LCA_timber_activity_polygons_2016-2019", pattern = ".shp$", full.names = T)
+
+harvests <- read_sf(sf_path)
+```
+
+Scenario data
+This includes the scenario pairings and the scenario IDs
+```{r}
+scenario_paths <- dir("inst", full.names = T)
+
+scen_pairings <- fread(scenario_paths[1])
+scen_mat <- fread(scenario_paths[2])
+
+# remove pulp market
+scen_mat[, Pulp_Market := NULL]
+
+# inspect
+scen_mat
+```
+
+Define the use and reference scenarios
+It would be good to make a function here since this will be run a number of times...
+
+Maybe I want to filter the scenario pairings file instead...
+```{r}
+use <- 
+  subset(scen_mat, Fraction_Piled == 50 & 
+           Biomass_Collection == "All Tech Recoverable" &
+           Burn_Type == "Broadcast")
+
+# get ids
+use_ids <- use$ID
+
+ref <- 
+  subset(scen_mat, Fraction_Piled == 50 & 
+           Biomass_Collection == "No" & 
+           Burn_Type == "Pile and Broadcast")
+
+# get ids
+ref_ids <- ref$ID
+```
+
+# Extract polygons names
+This is an important step in that it ties the model output data back to the polygons. This will be joined back with the data once it is in a simple data.table format. The length of `polys` and the resultant `data` must be the same length
+```{r}
+polys <- tools::file_path_sans_ext(gsub(".*/", "", unlist(files)))
+```
+
+Read the output data and filter based on the scenarios
+
+Data is structured in a list format only showing the time series emissions. I need to filter based on teh Use first and then reference. The net emissions for each category are shown in the name of the list.
+
+```{r include=TRUE}
+# read files (wrap into filtering)
+# Filter based on reference ids first
+data <- lapply(files, function(file) {
+  dat <-
+    readRDS(file)
+  da <- dat[grepl(paste0("\\b", ref_ids, "\\b", collapse = "|"), names(dat))]
+  return(da)
+})
+
+# simplify list structure
+data <- unlist(data, recursive = F) # retain list structure
+
+## May not need this second filter
+# Further filter based on selected use case
+data <-
+  lapply(data, function(file) {
+    file[grepl(paste0("\\b", use_ids, "\\b", collapse = "|"), names(file))]
+  })
+
+# simplify list structure
+data <- unlist(data, recursive = F)
+```
+
+# Extract important information from data
+
+```{r}
+out <- lapply(data, function(d) {
+  d[, .(net.MT_CO2e.AGWP.100yr, net.MT_CO2e.AGTP.100yr)] %>% 
+    distinct()
+})
+
+# bind together
+data <- rbindlist(out)
+```
+
+# Bind with spatial data
+TODO this would be better to preserve in the data somehow rather than binding together
+
+```{r}
+data <- cbind(polys, data)
+
+# TODO check on this
+# convert data to correct units; This is the difference between MT and grams
+data <-
+  data %>%
+  mutate(AGTP_co2e = AGTP_co2e * 1000000)
+
+# rename ID for join
+harvests <- 
+    harvests %>%
+      rename(polys = OBJECTID) %>%
+      mutate(polys = as.character(polys))
+
+# join by polygon ID
+data <- left_join(data, harvests, by = "polys")
+```
+
+# Plotting
+## Historgram with nice gradient
+
+# Write for use in QGIS
+
+```{r}
+
+```
+
