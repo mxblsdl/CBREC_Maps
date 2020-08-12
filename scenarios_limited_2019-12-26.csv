@@ -1,0 +1,244 @@
+ID,Silvicultural_Treatment,Fraction_Piled,Fraction_Scattered,Burn_Type,Biomass_Collection,Pulp_Market
+55,20_Thin_From_Above,0,100,Broadcast,All Tech Recoverable,No
+57,20_Thin_From_Above,0,100,Broadcast,No,No
+59,20_Thin_From_Above,0,100,None,All Tech Recoverable,No
+61,20_Thin_From_Above,0,100,None,No,No
+63,20_Thin_From_Above,30,70,Broadcast,All Tech Recoverable,No
+65,20_Thin_From_Above,30,70,Broadcast,No,No
+67,20_Thin_From_Above,30,70,Broadcast,Piles Only,No
+69,20_Thin_From_Above,30,70,None,All Tech Recoverable,No
+71,20_Thin_From_Above,30,70,None,No,No
+73,20_Thin_From_Above,30,70,None,Piles Only,No
+75,20_Thin_From_Above,30,70,Pile,No,No
+77,20_Thin_From_Above,30,70,Pile and Broadcast,No,No
+79,20_Thin_From_Above,50,50,Broadcast,All Tech Recoverable,No
+81,20_Thin_From_Above,50,50,Broadcast,No,No
+83,20_Thin_From_Above,50,50,Broadcast,Piles Only,No
+85,20_Thin_From_Above,50,50,None,All Tech Recoverable,No
+87,20_Thin_From_Above,50,50,None,No,No
+89,20_Thin_From_Above,50,50,None,Piles Only,No
+91,20_Thin_From_Above,50,50,Pile,No,No
+93,20_Thin_From_Above,50,50,Pile and Broadcast,No,No
+95,20_Thin_From_Above,70,30,Broadcast,All Tech Recoverable,No
+97,20_Thin_From_Above,70,30,Broadcast,No,No
+99,20_Thin_From_Above,70,30,Broadcast,Piles Only,No
+101,20_Thin_From_Above,70,30,None,All Tech Recoverable,No
+103,20_Thin_From_Above,70,30,None,No,No
+105,20_Thin_From_Above,70,30,None,Piles Only,No
+107,20_Thin_From_Above,70,30,Pile,No,No
+109,20_Thin_From_Below,0,100,Broadcast,All Tech Recoverable,No
+111,20_Thin_From_Below,0,100,Broadcast,No,No
+113,20_Thin_From_Below,0,100,None,All Tech Recoverable,No
+115,20_Thin_From_Below,0,100,None,No,No
+117,20_Thin_From_Below,30,70,Broadcast,All Tech Recoverable,No
+119,20_Thin_From_Below,30,70,Broadcast,No,No
+121,20_Thin_From_Below,30,70,Broadcast,Piles Only,No
+123,20_Thin_From_Below,30,70,None,All Tech Recoverable,No
+125,20_Thin_From_Below,30,70,None,No,No
+127,20_Thin_From_Below,30,70,None,Piles Only,No
+129,20_Thin_From_Below,30,70,Pile,No,No
+131,20_Thin_From_Below,30,70,Pile and Broadcast,No,No
+133,20_Thin_From_Below,50,50,Broadcast,All Tech Recoverable,No
+135,20_Thin_From_Below,50,50,Broadcast,No,No
+137,20_Thin_From_Below,50,50,Broadcast,Piles Only,No
+139,20_Thin_From_Below,50,50,None,All Tech Recoverable,No
+141,20_Thin_From_Below,50,50,None,No,No
+143,20_Thin_From_Below,50,50,None,Piles Only,No
+145,20_Thin_From_Below,50,50,Pile,No,No
+147,20_Thin_From_Below,50,50,Pile and Broadcast,No,No
+149,20_Thin_From_Below,70,30,Broadcast,All Tech Recoverable,No
+151,20_Thin_From_Below,70,30,Broadcast,No,No
+153,20_Thin_From_Below,70,30,Broadcast,Piles Only,No
+155,20_Thin_From_Below,70,30,None,All Tech Recoverable,No
+157,20_Thin_From_Below,70,30,None,No,No
+159,20_Thin_From_Below,70,30,None,Piles Only,No
+161,20_Thin_From_Below,70,30,Pile,No,No
+217,40_Thin_From_Above,0,100,Broadcast,All Tech Recoverable,No
+219,40_Thin_From_Above,0,100,Broadcast,No,No
+221,40_Thin_From_Above,0,100,None,All Tech Recoverable,No
+223,40_Thin_From_Above,0,100,None,No,No
+225,40_Thin_From_Above,30,70,Broadcast,All Tech Recoverable,No
+227,40_Thin_From_Above,30,70,Broadcast,No,No
+229,40_Thin_From_Above,30,70,Broadcast,Piles Only,No
+231,40_Thin_From_Above,30,70,None,All Tech Recoverable,No
+233,40_Thin_From_Above,30,70,None,No,No
+235,40_Thin_From_Above,30,70,None,Piles Only,No
+237,40_Thin_From_Above,30,70,Pile,No,No
+239,40_Thin_From_Above,30,70,Pile and Broadcast,No,No
+241,40_Thin_From_Above,50,50,Broadcast,All Tech Recoverable,No
+243,40_Thin_From_Above,50,50,Broadcast,No,No
+245,40_Thin_From_Above,50,50,Broadcast,Piles Only,No
+247,40_Thin_From_Above,50,50,None,All Tech Recoverable,No
+249,40_Thin_From_Above,50,50,None,No,No
+251,40_Thin_From_Above,50,50,None,Piles Only,No
+253,40_Thin_From_Above,50,50,Pile,No,No
+255,40_Thin_From_Above,50,50,Pile and Broadcast,No,No
+257,40_Thin_From_Above,70,30,Broadcast,All Tech Recoverable,No
+259,40_Thin_From_Above,70,30,Broadcast,No,No
+261,40_Thin_From_Above,70,30,Broadcast,Piles Only,No
+263,40_Thin_From_Above,70,30,None,All Tech Recoverable,No
+265,40_Thin_From_Above,70,30,None,No,No
+267,40_Thin_From_Above,70,30,None,Piles Only,No
+269,40_Thin_From_Above,70,30,Pile,No,No
+271,40_Thin_From_Below,0,100,Broadcast,All Tech Recoverable,No
+273,40_Thin_From_Below,0,100,Broadcast,No,No
+275,40_Thin_From_Below,0,100,None,All Tech Recoverable,No
+277,40_Thin_From_Below,0,100,None,No,No
+279,40_Thin_From_Below,30,70,Broadcast,All Tech Recoverable,No
+281,40_Thin_From_Below,30,70,Broadcast,No,No
+283,40_Thin_From_Below,30,70,Broadcast,Piles Only,No
+285,40_Thin_From_Below,30,70,None,All Tech Recoverable,No
+287,40_Thin_From_Below,30,70,None,No,No
+289,40_Thin_From_Below,30,70,None,Piles Only,No
+291,40_Thin_From_Below,30,70,Pile,No,No
+293,40_Thin_From_Below,30,70,Pile and Broadcast,No,No
+295,40_Thin_From_Below,50,50,Broadcast,All Tech Recoverable,No
+297,40_Thin_From_Below,50,50,Broadcast,No,No
+299,40_Thin_From_Below,50,50,Broadcast,Piles Only,No
+301,40_Thin_From_Below,50,50,None,All Tech Recoverable,No
+303,40_Thin_From_Below,50,50,None,No,No
+305,40_Thin_From_Below,50,50,None,Piles Only,No
+307,40_Thin_From_Below,50,50,Pile,No,No
+309,40_Thin_From_Below,50,50,Pile and Broadcast,No,No
+311,40_Thin_From_Below,70,30,Broadcast,All Tech Recoverable,No
+313,40_Thin_From_Below,70,30,Broadcast,No,No
+315,40_Thin_From_Below,70,30,Broadcast,Piles Only,No
+317,40_Thin_From_Below,70,30,None,All Tech Recoverable,No
+319,40_Thin_From_Below,70,30,None,No,No
+321,40_Thin_From_Below,70,30,None,Piles Only,No
+323,40_Thin_From_Below,70,30,Pile,No,No
+379,60_Thin_From_Above,0,100,Broadcast,All Tech Recoverable,No
+381,60_Thin_From_Above,0,100,Broadcast,No,No
+383,60_Thin_From_Above,0,100,None,All Tech Recoverable,No
+385,60_Thin_From_Above,0,100,None,No,No
+387,60_Thin_From_Above,30,70,Broadcast,All Tech Recoverable,No
+389,60_Thin_From_Above,30,70,Broadcast,No,No
+391,60_Thin_From_Above,30,70,Broadcast,Piles Only,No
+393,60_Thin_From_Above,30,70,None,All Tech Recoverable,No
+395,60_Thin_From_Above,30,70,None,No,No
+397,60_Thin_From_Above,30,70,None,Piles Only,No
+399,60_Thin_From_Above,30,70,Pile,No,No
+401,60_Thin_From_Above,30,70,Pile and Broadcast,No,No
+403,60_Thin_From_Above,50,50,Broadcast,All Tech Recoverable,No
+405,60_Thin_From_Above,50,50,Broadcast,No,No
+407,60_Thin_From_Above,50,50,Broadcast,Piles Only,No
+409,60_Thin_From_Above,50,50,None,All Tech Recoverable,No
+411,60_Thin_From_Above,50,50,None,No,No
+413,60_Thin_From_Above,50,50,None,Piles Only,No
+415,60_Thin_From_Above,50,50,Pile,No,No
+417,60_Thin_From_Above,50,50,Pile and Broadcast,No,No
+419,60_Thin_From_Above,70,30,Broadcast,All Tech Recoverable,No
+421,60_Thin_From_Above,70,30,Broadcast,No,No
+423,60_Thin_From_Above,70,30,Broadcast,Piles Only,No
+425,60_Thin_From_Above,70,30,None,All Tech Recoverable,No
+427,60_Thin_From_Above,70,30,None,No,No
+429,60_Thin_From_Above,70,30,None,Piles Only,No
+431,60_Thin_From_Above,70,30,Pile,No,No
+433,60_Thin_From_Below,0,100,Broadcast,All Tech Recoverable,No
+435,60_Thin_From_Below,0,100,Broadcast,No,No
+437,60_Thin_From_Below,0,100,None,All Tech Recoverable,No
+439,60_Thin_From_Below,0,100,None,No,No
+441,60_Thin_From_Below,30,70,Broadcast,All Tech Recoverable,No
+443,60_Thin_From_Below,30,70,Broadcast,No,No
+445,60_Thin_From_Below,30,70,Broadcast,Piles Only,No
+447,60_Thin_From_Below,30,70,None,All Tech Recoverable,No
+449,60_Thin_From_Below,30,70,None,No,No
+451,60_Thin_From_Below,30,70,None,Piles Only,No
+453,60_Thin_From_Below,30,70,Pile,No,No
+455,60_Thin_From_Below,30,70,Pile and Broadcast,No,No
+457,60_Thin_From_Below,50,50,Broadcast,All Tech Recoverable,No
+459,60_Thin_From_Below,50,50,Broadcast,No,No
+461,60_Thin_From_Below,50,50,Broadcast,Piles Only,No
+463,60_Thin_From_Below,50,50,None,All Tech Recoverable,No
+465,60_Thin_From_Below,50,50,None,No,No
+467,60_Thin_From_Below,50,50,None,Piles Only,No
+469,60_Thin_From_Below,50,50,Pile,No,No
+471,60_Thin_From_Below,50,50,Pile and Broadcast,No,No
+473,60_Thin_From_Below,70,30,Broadcast,All Tech Recoverable,No
+475,60_Thin_From_Below,70,30,Broadcast,No,No
+477,60_Thin_From_Below,70,30,Broadcast,Piles Only,No
+479,60_Thin_From_Below,70,30,None,All Tech Recoverable,No
+481,60_Thin_From_Below,70,30,None,No,No
+483,60_Thin_From_Below,70,30,None,Piles Only,No
+485,60_Thin_From_Below,70,30,Pile,No,No
+541,80_Thin_From_Above,0,100,Broadcast,All Tech Recoverable,No
+543,80_Thin_From_Above,0,100,Broadcast,No,No
+545,80_Thin_From_Above,0,100,None,All Tech Recoverable,No
+547,80_Thin_From_Above,0,100,None,No,No
+549,80_Thin_From_Above,30,70,Broadcast,All Tech Recoverable,No
+551,80_Thin_From_Above,30,70,Broadcast,No,No
+553,80_Thin_From_Above,30,70,Broadcast,Piles Only,No
+555,80_Thin_From_Above,30,70,None,All Tech Recoverable,No
+557,80_Thin_From_Above,30,70,None,No,No
+559,80_Thin_From_Above,30,70,None,Piles Only,No
+561,80_Thin_From_Above,30,70,Pile,No,No
+563,80_Thin_From_Above,30,70,Pile and Broadcast,No,No
+565,80_Thin_From_Above,50,50,Broadcast,All Tech Recoverable,No
+567,80_Thin_From_Above,50,50,Broadcast,No,No
+569,80_Thin_From_Above,50,50,Broadcast,Piles Only,No
+571,80_Thin_From_Above,50,50,None,All Tech Recoverable,No
+573,80_Thin_From_Above,50,50,None,No,No
+575,80_Thin_From_Above,50,50,None,Piles Only,No
+577,80_Thin_From_Above,50,50,Pile,No,No
+579,80_Thin_From_Above,50,50,Pile and Broadcast,No,No
+581,80_Thin_From_Above,70,30,Broadcast,All Tech Recoverable,No
+583,80_Thin_From_Above,70,30,Broadcast,No,No
+585,80_Thin_From_Above,70,30,Broadcast,Piles Only,No
+587,80_Thin_From_Above,70,30,None,All Tech Recoverable,No
+589,80_Thin_From_Above,70,30,None,No,No
+591,80_Thin_From_Above,70,30,None,Piles Only,No
+593,80_Thin_From_Above,70,30,Pile,No,No
+595,80_Thin_From_Below,0,100,Broadcast,All Tech Recoverable,No
+597,80_Thin_From_Below,0,100,Broadcast,No,No
+599,80_Thin_From_Below,0,100,None,All Tech Recoverable,No
+601,80_Thin_From_Below,0,100,None,No,No
+603,80_Thin_From_Below,30,70,Broadcast,All Tech Recoverable,No
+605,80_Thin_From_Below,30,70,Broadcast,No,No
+607,80_Thin_From_Below,30,70,Broadcast,Piles Only,No
+609,80_Thin_From_Below,30,70,None,All Tech Recoverable,No
+611,80_Thin_From_Below,30,70,None,No,No
+613,80_Thin_From_Below,30,70,None,Piles Only,No
+615,80_Thin_From_Below,30,70,Pile,No,No
+617,80_Thin_From_Below,30,70,Pile and Broadcast,No,No
+619,80_Thin_From_Below,50,50,Broadcast,All Tech Recoverable,No
+621,80_Thin_From_Below,50,50,Broadcast,No,No
+623,80_Thin_From_Below,50,50,Broadcast,Piles Only,No
+625,80_Thin_From_Below,50,50,None,All Tech Recoverable,No
+627,80_Thin_From_Below,50,50,None,No,No
+629,80_Thin_From_Below,50,50,None,Piles Only,No
+631,80_Thin_From_Below,50,50,Pile,No,No
+633,80_Thin_From_Below,50,50,Pile and Broadcast,No,No
+635,80_Thin_From_Below,70,30,Broadcast,All Tech Recoverable,No
+637,80_Thin_From_Below,70,30,Broadcast,No,No
+639,80_Thin_From_Below,70,30,Broadcast,Piles Only,No
+641,80_Thin_From_Below,70,30,None,All Tech Recoverable,No
+643,80_Thin_From_Below,70,30,None,No,No
+645,80_Thin_From_Below,70,30,None,Piles Only,No
+647,80_Thin_From_Below,70,30,Pile,No,No
+649,Clearcut,0,100,Broadcast,All Tech Recoverable,No
+651,Clearcut,0,100,Broadcast,No,No
+653,Clearcut,0,100,None,All Tech Recoverable,No
+655,Clearcut,0,100,None,No,No
+657,Clearcut,30,70,Broadcast,All Tech Recoverable,No
+659,Clearcut,30,70,Broadcast,No,No
+661,Clearcut,30,70,Broadcast,Piles Only,No
+663,Clearcut,30,70,None,All Tech Recoverable,No
+665,Clearcut,30,70,None,No,No
+667,Clearcut,30,70,None,Piles Only,No
+669,Clearcut,30,70,Pile,No,No
+671,Clearcut,30,70,Pile and Broadcast,No,No
+673,Clearcut,50,50,Broadcast,All Tech Recoverable,No
+675,Clearcut,50,50,Broadcast,No,No
+677,Clearcut,50,50,Broadcast,Piles Only,No
+679,Clearcut,50,50,None,All Tech Recoverable,No
+681,Clearcut,50,50,None,No,No
+683,Clearcut,50,50,None,Piles Only,No
+685,Clearcut,50,50,Pile,No,No
+687,Clearcut,50,50,Pile and Broadcast,No,No
+689,Clearcut,70,30,Broadcast,All Tech Recoverable,No
+691,Clearcut,70,30,Broadcast,No,No
+693,Clearcut,70,30,Broadcast,Piles Only,No
+695,Clearcut,70,30,None,All Tech Recoverable,No
+697,Clearcut,70,30,None,No,No
+699,Clearcut,70,30,None,Piles Only,No
+701,Clearcut,70,30,Pile,No,No

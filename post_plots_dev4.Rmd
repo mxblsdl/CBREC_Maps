@@ -1,0 +1,594 @@
+---
+  title: "CBREC LCA Analysis of Timber Harvest Projects from 2016 - 2019"
+author: "Jerome Carman"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document: default
+pdf_document: default
+geometry: margin=2cm
+---
+  
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = F)
+knitr::opts_chunk$set(include = F)
+
+options(scipen = 10)
+
+knitr::opts_knit$set(root.dir = rprojroot::find_rstudio_root_file())
+```
+
+# Setup
+Load libraries and helper functions
+
+Set user defined variables
+```{r results='hide'}
+
+source("Post_Processing/CBI_postFunctions.R")
+
+# Fully clear all non-base packages that are loaded to avoid "monkey patch" conflicts across packages
+#   Iteratively call unloadPackages() in order to capture packages that couldn't be unloaded because of dependency by other loaded packages
+# unloadErrors <- unloadPackages()
+# while(length(unloadErrors)>0) {
+#   unloadErrors <- unloadPackages()
+# }
+
+library(data.table) # data structure
+library(tictoc) # time test
+library(praise) # why not?
+#library(dplyr) # data wrangling
+#library(tidyr) # additional data wrangling
+library(ggridges) # additional ridge plotting
+library(ggplot2) # plotting
+library(future.apply)
+
+# Set parallelization plan
+options(future.fork.enable = T) # allows old method of parallelization with forked 'rsessions'
+plan(multiprocess, workers = 26) # check this value and change if memory concerns appear
+
+# Choose whether to save outputs or not
+save_outputs = F
+
+#setwd("/media/spin/cbi/CBREC-LCA/Post_Processing/")
+```
+
+Define helper functions
+```{r include=TRUE}
+"%notin%" <- function(x, table) match(x, table, nomatch = 0) == 0
+
+# bind data into data table function; works with specific list strucutre of outputs
+bindDataTable <- function(data) {
+  require(data.table)
+  tr <-
+    lapply(data, function(d) {
+      # simplify list structure
+      d <- unlist(d, recursive = F)
+      # bind together as data table
+      d <- rbindlist(d)
+      return(d)
+    })
+  return(tr)
+}
+
+## ggplot theme
+mxblsdl <- theme_minimal(base_size = 12) +
+  theme(legend.position = "bottom",
+        #legend.title = element_blank(),
+        strip.text = element_text(size = 12),
+        axis.text = element_text(size = 12),
+        legend.text = element_text(size = 12))
+
+# set the theme for all plots
+theme_set(mxblsdl)
+```
+
+Load All Data Sets
+```{r include=TRUE}
+options(future.fork.enable = T) # allows old method of parallelization with forked 'rsessions'
+plan(multiprocess,workers=26)
+
+loadData <- T
+if(loadData) {
+  load(file="/media/spin/cbi/CBREC-LCA/CBREC_output/post_plots.RData")
+} else {
+  # load case matrix
+  caseMat <- as.data.table(read.csv("/media/spin/cbi/CBREC-Fire/data/SERC/scenarios_limited_2019-12-26.csv"))
+  caseMat[,Pulp_Market:=NULL]
+  
+  # Load scenario case pairings
+  scen_mat <- as.data.table(read.csv("Post_Processing/Scenario-case-pairings.csv"))
+  scen_mat[,(1):=NULL] # Delete index column that was created by write.csv() in generateScenarioCasePairings.Rmd
+  
+  # Load and Process Baseline
+  filesBaseline <- dir("/media/spin/cbi/CBREC-LCA/CBREC_output/2020_06_harvests/cli_met_out_baseline_funcUnitkWh/2020_06_30/", full.names = T)
+  if(!length(filesBaseline[!grep("*.rds",filesBaseline)])) { # Make sure all files are .rds files
+    dataBaseline <- future_lapply(filesBaseline, readRDS)
+    names(dataBaseline) <- tools::file_path_sans_ext(basename(filesBaseline))
+  }
+  dataBaseline <- bindDataTable(dataBaseline)
+  dataBaseline <- future_lapply(dataBaseline, function(scenario) {
+    subsetScenario <- scenario[use %in% scen_mat$Use, .SD]
+    return(subsetScenario)
+  })
+  dataBaseline <- rbindlist(dataBaseline, idcol = "Poly") # Combine into single data table for plotting
+  dataBaseline[, ID := paste0(Poly, "_", use, "-", ref)] # create ID column for each use ref combination
+  dataBaseline <- dataBaseline[dataBaseline$MT_Residue_Mobilized >= 1] # Subset to those projects which mobilized at least 1 MT of residue
+  rm(filesBaseline)
+  
+  # Load and Process CHP
+  filesCHP <- dir("/media/spin/cbi/CBREC-LCA/CBREC_output/2020_06_harvests/cli_met_out_CHP_funcUnitkWh/2020_06_30/", full.names = T)
+  if(!length(filesCHP[!grep("*.rds",filesCHP)])) { # Make sure all files are .rds files
+    dataCHP <- future_lapply(filesCHP, readRDS)
+    names(dataCHP) <- tools::file_path_sans_ext(basename(filesCHP))
+  }
+  dataCHP <- bindDataTable(dataCHP)
+  dataCHP <- future_lapply(dataCHP, function(scenario) {
+    subsetScenario <- scenario[use %in% scen_mat$Use, .SD]
+    return(subsetScenario)
+  })
+  dataCHP <- rbindlist(dataCHP, idcol = "Poly") # Combine into single data table for plotting
+  dataCHP[, ID := paste0(Poly, "_", use, "-", ref)] # create ID column for each use ref combination
+  dataCHP <- dataCHP[dataCHP$MT_Residue_Mobilized >= 1] # Subset to those projects which mobilized at least 1 MT of residue
+  rm(filesCHP)
+  
+  # Load and Process PP Efficiency
+  filesPP <- dir("/media/spin/cbi/CBREC-LCA/CBREC_output/2020_06_harvests/cli_met_out_PPNextGen_funcUnitkWh/2020_06_30/", full.names = T)
+  if(!length(filesPP[!grep("*.rds",filesPP)])) { # Make sure all files are .rds files
+    dataPP <- future_lapply(filesPP, readRDS)
+    names(dataPP) <- tools::file_path_sans_ext(basename(filesPP))
+  }
+  dataPP <- bindDataTable(dataPP)
+  dataPP <- future_lapply(dataPP, function(scenario) {
+    subsetScenario <- scenario[use %in% scen_mat$Use, .SD]
+    return(subsetScenario)
+  })
+  dataPP <- rbindlist(dataPP, idcol = "Poly") # Combine into single data table for plotting
+  dataPP[, ID := paste0(Poly, "_", use, "-", ref)] # create ID column for each use ref combination
+  dataPP <- dataPP[dataPP$MT_Residue_Mobilized >= 1] # Subset to those projects which mobilized at least 1 MT of residue
+  rm(filesPP)
+  
+  # Load and Process CH4 Data
+  filesCH4 <- dir("/media/spin/cbi/CBREC-LCA/CBREC_output/2020_06_harvests_sens-highCH4/cli_met_out_baseline_funcUnitkWh/2020_06_30/", full.names = T)
+  if(!length(filesCH4[!grep("*.rds",filesCH4)])) { # Make sure all files are .rds files
+    dataCH4 <- future_lapply(filesCH4, readRDS)
+    names(dataCH4) <- tools::file_path_sans_ext(basename(filesCH4))
+  }
+  dataCH4 <- bindDataTable(dataCH4)
+  dataCH4 <- future_lapply(dataCH4, function(scenario) {
+    subsetScenario <- scenario[use %in% scen_mat$Use, .SD]
+    return(subsetScenario)
+  })
+  dataCH4 <- rbindlist(dataCH4, idcol = "Poly") # Combine into single data table for plotting
+  dataCH4[, ID := paste0(Poly, "_", use, "-", ref)] # create ID column for each use ref combination
+  dataCH4 <- dataCH4[dataCH4$MT_Residue_Mobilized >= 1] # Subset to those projects which mobilized at least 1 MT of residue
+  rm(filesCH4)
+  
+  # Load and Process Storage Data
+  filesStorage <- dir("/media/spin/cbi/CBREC-LCA/CBREC_output/2020_06_harvests_sens-noStorage/cli_met_out_baseline_funcUnitkWh/2020_06_30/", full.names = T)
+  if(!length(filesStorage[!grep("*.rds",filesStorage)])) { # Make sure all files are .rds files
+    dataStorage <- future_lapply(filesStorage, readRDS)
+    names(dataStorage) <- tools::file_path_sans_ext(basename(filesStorage))
+  }
+  dataStorage <- bindDataTable(dataStorage)
+  dataStorage <- future_lapply(dataStorage, function(scenario) {
+    subsetScenario <- scenario[use %in% scen_mat$Use, .SD]
+    return(subsetScenario)
+  })
+  dataStorage <- rbindlist(dataStorage, idcol = "Poly") # Combine into single data table for plotting
+  dataStorage[, ID := paste0(Poly, "_", use, "-", ref)] # create ID column for each use ref combination
+  dataStorage <- dataStorage[dataStorage$MT_Residue_Mobilized >= 1] # Subset to those projects which mobilized at least 1 MT of residue
+  rm(filesStorage)
+}
+
+
+```
+
+# All-In Baseline Density Plots
+- 1. MT residue mobilized
+- 2. kg CO2e for each climate metric, per kWh
+- 3. kg CO2e for each climate metric, faceted by reference burn type, per kWh
+- 4. g PM2.5 per kWh  
+```{r include=TRUE, fig.height=6}
+# 1. MT Residue Mobilizes
+plotMTResidueAll <- dataBaseline[,unique(MT_Residue_Mobilized),by=ID]
+ggplot(plotMTResidueAll, aes(V1)) +
+  geom_histogram(aes(y=stat(count) / sum(stat(count))), binwidth=0.1) +
+  scale_x_log10() +
+  labs(x="MT Residue Mobilized",
+       y="Fraction of Timber Harvests",
+       title = "Density Plot of MT Mobilized Forest Residues")
+
+# 2. kg CO2e for each climate metric, per kWh
+plotAGWPAll <- dataBaseline[,unique(net.MT_CO2e.AGWP.100yr)*1000,by=ID]
+ggplot(plotAGWPAll, aes(V1)) +
+  geom_histogram(aes(y=stat(count) / sum(stat(count))), binwidth=0.01) +
+  labs(x="Net kg CO2e (100 yr AGWP) per kWh",
+       y="Fraction of Timber Harvests",
+       title = "Density Plot of Net CO2e (100 Year GWP)",
+       subtitle = "Generic Current Generation Combustion Plant, no CHP\nLarge Harvest Equipment System with Dry-Grind Comminution\nStatic Haul Distance of 50 km")
+
+plotAGTPAll <- dataBaseline[,unique(net.MT_CO2e.AGTP.100yr)*1000,by=ID]
+ggplot(plotAGTPAll, aes(V1)) +
+  geom_histogram(aes(y=stat(count) / sum(stat(count))), binwidth=0.01) +
+  #scale_x_log10() +
+  labs(x="Net kg CO2e (100 yr AGTP) per kWh",
+       y="Fraction of Timber Harvests",
+       title = "Density Plot of Net CO2e (100 Year GTP)",
+       subtitle = "Generic Current Generation Combustion Plant, no CHP\nLarge Harvest Equipment System with Dry-Grind Comminution\nStatic Haul Distance of 50 km")
+
+# 3. kg CO2e for each climate metric, faceted by reference burn type, per kWh
+plotAllRefBurn <- melt(dataBaseline[,.(AGWP=unique(net.MT_CO2e.AGWP.100yr)*1000,AGTP=unique(net.MT_CO2e.AGTP.100yr)*1000),by=c("ID","Ref.Burn.Type")],
+                       id.vars=c("ID","Ref.Burn.Type"))
+ggplot(plotAllRefBurn, aes(x=value)) +
+  geom_freqpoly(aes(y=stat(count) / sum(stat(count)),color=Ref.Burn.Type), binwidth=0.01, size=0.8) +
+  facet_wrap(~variable) +
+  #scale_x_log10() +
+  labs(x="Net kg CO2e per kWh",
+       y="Fraction of Timber Harvests",
+       title = "Density Plot of Net CO2e by Reference Burn Type",
+       subtitle = "Generic Current Generation Combustion Plant, no CHP\nLarge Harvest Equipment System with Dry-Grind Comminution\nStatic Haul Distance of 50 km",
+       color="Reference Burn Type") +
+  guides(color=guide_legend(title.position = "top",title.hjust = 0.5))
+
+# 4. g PM2.5 per kWh
+plotPM <- dataBaseline[,.SD[1:10],by=ID]
+plotPM <- melt(plotPM[,.(PM=sum(net.PM2.5_MTperkWh)*1E6), by=c("ID","Ref.Burn.Type","Biomass.Collection")],
+               id.vars=c("ID","Ref.Burn.Type","Biomass.Collection"))
+plotPM[Ref.Burn.Type!="None",Ref.Burn.Type:="RX Burn"]
+ggplot(plotPM, aes(x=value)) +
+  geom_freqpoly(aes(y=stat(count) / sum(stat(count)), color=Biomass.Collection), binwidth=0.05, size=0.8) +
+  facet_wrap(~Ref.Burn.Type, scales = "free") +
+  labs(x="Net g PM2.5 per kWh",
+       y="Fraction of Timber Harvests",
+       title = "Density Plot of 10 Year Sum of Net PM2.5",
+       subtitle = "Generic Current Generation Combustion Plant, no CHP\nLarge Harvest Equipment System with Dry-Grind Comminution\nStatic Haul Distance of 50 km",
+       color="Biomass Collection") +
+  guides(color=guide_legend(title.position = "top",title.hjust = 0.5))
+```
+
+# Sensitivity Plots
+- 1. All in density plot of CO2e (AGTP) for both baseline and CHP
+- 2. All in density plot of CO2e (AGTP) for both baseline and Higher PP Efficiency
+- 3. All in density plot of CO2e (AGTP) for both baseline and high CH4
+- 4. All in density plot of CO2e (AGTP) for both baseline and no storage  
+```{r include=TRUE, fig.height=6}
+# 1. CHP Comparison
+plotAGTPAll_Baseline <- dataBaseline[,.(Baseline=unique(net.MT_CO2e.AGTP.100yr)*1000),by=c("ID","Ref.Burn.Type","Biomass.Collection")]
+plotAGTPAll_CHP <- dataCHP[,.(CHP=unique(net.MT_CO2e.AGTP.100yr)*1000),by=ID]
+setkey(plotAGTPAll_Baseline,ID)
+setkey(plotAGTPAll_CHP,ID)
+plotCHP_Compare <- plotAGTPAll_Baseline[plotAGTPAll_CHP]
+plotCHP_Compare <- melt(plotCHP_Compare, id.vars=c("ID","Ref.Burn.Type","Biomass.Collection"))
+ggplot(data=plotCHP_Compare, aes(x=value)) +
+  geom_freqpoly(aes(y=stat(count) / sum(stat(count)),color=variable), binwidth=0.01) +
+  labs(x="Net kg CO2e (100 yr AGTP) per kWh",
+       y="Fraction of Timber Harvests",
+       title = "Comparison of Impact of CHP on Net CO2e (100 Year GTP)",
+       subtitle = "Generic Current Generation Combustion Plant\nLarge Harvest Equipment System with Dry-Grind Comminution\nStatic Haul Distance of 50 km\nCoGen Efficiency = 80% (CPUC QF/CHP Settlement Minimum Requirement)",
+       color="Data Set") +
+  guides(color=guide_legend(title.position = "top",title.hjust = 0.5))
+
+# 2. PP Efficiency Comparison
+plotAGTPAll_Baseline <- dataBaseline[,.(CurGenStoker=unique(net.MT_CO2e.AGTP.100yr)*1000),by=c("ID","Ref.Burn.Type","Biomass.Collection")]
+plotAGTPAll_PPEff <- dataPP[,.(NextGenGasifier=unique(net.MT_CO2e.AGTP.100yr)*1000),by=ID]
+setkey(plotAGTPAll_Baseline,ID)
+setkey(plotAGTPAll_PPEff,ID)
+plotPP_Compare <- plotAGTPAll_Baseline[plotAGTPAll_PPEff]
+plotPP_Compare <- melt(plotPP_Compare, id.vars=c("ID","Ref.Burn.Type","Biomass.Collection"))
+ggplot(data=plotPP_Compare, aes(x=value)) +
+  geom_freqpoly(aes(y=stat(count) / sum(stat(count)),color=variable), binwidth=0.01) +
+  labs(x="Net kg CO2e (100 yr AGTP) per kWh",
+       y="Fraction of Timber Harvests",
+       title = "Comparison of Impact of PP Efficiency on Net CO2e (100 Year GTP)",
+       subtitle = "No CHP\nLarge Harvest Equipment System with Dry-Grind Comminution\nStatic Haul Distance of 50 km\nCurGenStoker = 20%, NextGenGasifier = 28%",
+       color="Data Set") +
+  guides(color=guide_legend(title.position = "top",title.hjust = 0.5))
+
+# 3. CH4 Sensitivity
+plotAGTPAll_Baseline <- dataBaseline[Poly %in% dataCH4[,unique(Poly)],.SD]
+plotAGTPAll_CH4 <- dataCH4[Poly %in% plotAGTPAll_Baseline[,unique(Poly)],.SD]
+plotAGTPAll_Baseline <- plotAGTPAll_Baseline[,.(AGWP=unique(net.MT_CO2e.AGWP.100yr)*1000,AGTP=unique(net.MT_CO2e.AGTP.100yr)*1000,CH4Rate="0.001%"),
+                                             by=c("ID","Ref.Burn.Type","Biomass.Collection")]
+plotAGTPAll_CH4 <- plotAGTPAll_CH4[,.(AGWP=unique(net.MT_CO2e.AGWP.100yr)*1000,AGTP=unique(net.MT_CO2e.AGTP.100yr)*1000,CH4Rate="5%"),
+                                   by=c("ID","Ref.Burn.Type","Biomass.Collection")]
+plotCH4_Compare <- rbind(plotAGTPAll_Baseline,plotAGTPAll_CH4)
+plotCH4_Compare <- melt(plotCH4_Compare, id.vars=c("ID","Ref.Burn.Type","Biomass.Collection","CH4Rate"))
+plotCH4_Compare[Ref.Burn.Type != "None", Ref.Burn.Type:="RX Burn"]
+ggplot(data=plotCH4_Compare, aes(x=value)) +
+  geom_freqpoly(aes(y=stat(count) / sum(stat(count)),color=CH4Rate), binwidth=0.02) +
+  facet_grid(Ref.Burn.Type~variable, labeller=label_wrap_gen(10)) +
+  labs(x="Net kg CO2e per kWh",
+       y="Fraction of Subset of 474 Timber Harvests out of 11,035",
+       title = "Comparison of Impact of Decay CH4 Rate on Net CO2e",
+       subtitle = "Generic Current Generation Combustion Plant, no CHP\nLarge Harvest Equipment System with Dry-Grind Comminution\nStatic Haul Distance of 50 km",
+       color="Decay CH4 Rate (Mass of C as CH4 / Mass of C Lost From Decay)") +
+  guides(color=guide_legend(title.position = "top",title.hjust = 0.5))
+
+# 4. Storage Sensitivity
+plotAGTPAll_Baseline <- dataBaseline[Poly %in% dataStorage[,unique(Poly)],.SD]
+plotAGTPAll_Storage <- dataStorage[Poly %in% plotAGTPAll_Baseline[,unique(Poly)],.SD]
+plotAGTPAll_Baseline <- plotAGTPAll_Baseline[,.(AGWP=unique(net.MT_CO2e.AGWP.100yr)*1000,AGTP=unique(net.MT_CO2e.AGTP.100yr)*1000,StorageTime="6 Months"),
+                                             by=c("ID","Ref.Burn.Type","Biomass.Collection")]
+plotAGTPAll_Storage <- plotAGTPAll_Storage[,.(AGWP=unique(net.MT_CO2e.AGWP.100yr)*1000,AGTP=unique(net.MT_CO2e.AGTP.100yr)*1000,StorageTime="0 Months"),
+                                           by=c("ID","Ref.Burn.Type","Biomass.Collection")]
+plotStorage_Compare <- rbind(plotAGTPAll_Baseline,plotAGTPAll_Storage)
+plotStorage_Compare <- melt(plotStorage_Compare, id.vars=c("ID","Ref.Burn.Type","Biomass.Collection","StorageTime"))
+ggplot(data=plotStorage_Compare, aes(x=value)) +
+  geom_freqpoly(aes(y=stat(count) / sum(stat(count)),color=StorageTime), binwidth=0.02) +
+  facet_grid(~variable) +
+  labs(x="Net kg CO2e per kWh",
+       y="Fraction of Subset of 410 Timber Harvests out of 11,035",
+       title = "Comparison of Impact of Power Plant Storage Pile Decay on Net CO2e",
+       subtitle = "Generic Current Generation Combustion Plant, no CHP\nLarge Harvest Equipment System with Dry-Grind Comminution\nStatic Haul Distance of 50 km",
+       color="Storage Time At Power Plant") +
+  guides(color=guide_legend(title.position = "top",title.hjust = 0.5))
+
+```
+
+# Breakdown of Percent Net Emissions By Source
+```{r eval=FALSE}
+options(future.fork.enable = T) # allows old method of parallelization with forked 'rsessions'
+plan(multiprocess, workers = 26) # check this value and change if memory concerns appear
+
+cmDir <- "/media/spin/cbi/CBREC-LCA/CBREC_output/2020_06_harvests/cm_gross_emissions/2020_06_30/"
+files <- dir(cmDir, full.names = T)
+cm_lists <- future_lapply(files, readRDS)
+names(cm_lists) <- tools::file_path_sans_ext(basename(files))
+
+polyFracSource <- future_lapply(names(cm_lists), function(polyID) {
+  useCaseFracSource <- future_lapply(names(cm_lists[[polyID]]$use), function(caseID) {
+    dt <- data.table(fracCO2AGWP = cm_lists[[polyID]][["use"]][[caseID]][["CO2.AGWP"]][,.SD / total.CO2_W_m2][,total.CO2_W_m2:=NULL],
+                     fracCH4AGWP = cm_lists[[polyID]][["use"]][[caseID]][["CH4.AGWP"]][,.SD / total.CH4_W_m2][,total.CH4_W_m2:=NULL],
+                     fracN2OAGWP = cm_lists[[polyID]][["use"]][[caseID]][["N2O.AGWP"]][,.SD / total.N2O_W_m2][,total.N2O_W_m2:=NULL],
+                     fracCO2AGTP = cm_lists[[polyID]][["use"]][[caseID]][["CO2.AGTP"]][,.SD / total.CO2_K][,total.CO2_K:=NULL],
+                     fracCH4AGTP = cm_lists[[polyID]][["use"]][[caseID]][["CH4.AGTP"]][,.SD / total.CH4_K][,total.CH4_K:=NULL],
+                     fracN2OAGTP = cm_lists[[polyID]][["use"]][[caseID]][["N2O.AGTP"]][,.SD / total.N2O_K][,total.N2O_K:=NULL])
+    return(dt)
+  })
+  
+  refCaseFracSource <- future_lapply(names(cm_lists[[polyID]]$ref), function(caseID) {
+    dt <- data.table(fracCO2AGWP = cm_lists[[polyID]][["ref"]][[caseID]][["CO2.AGWP"]][,.SD / total.CO2_W_m2][,total.CO2_W_m2:=NULL],
+                     fracCH4AGWP = cm_lists[[polyID]][["ref"]][[caseID]][["CH4.AGWP"]][,.SD / total.CH4_W_m2][,total.CH4_W_m2:=NULL],
+                     fracN2OAGWP = cm_lists[[polyID]][["ref"]][[caseID]][["N2O.AGWP"]][,.SD / total.N2O_W_m2][,total.N2O_W_m2:=NULL],
+                     fracCO2AGTP = cm_lists[[polyID]][["ref"]][[caseID]][["CO2.AGTP"]][,.SD / total.CO2_K][,total.CO2_K:=NULL],
+                     fracCH4AGTP = cm_lists[[polyID]][["ref"]][[caseID]][["CH4.AGTP"]][,.SD / total.CH4_K][,total.CH4_K:=NULL],
+                     fracN2OAGTP = cm_lists[[polyID]][["ref"]][[caseID]][["N2O.AGTP"]][,.SD / total.N2O_K][,total.N2O_K:=NULL])
+    return(dt)
+  })
+  
+  return(list(use = useCaseFracSource,
+              ref = refCaseFracSource))
+})
+```
+
+# Spatial Baseline Plots
+Not complete
+
+# Plot Intersection of CO2e climate metric with scenario climate metric
+To explain why AGTP is greater in magnitude than AGWP.
+Do this for both CO2 and CH4 curves
+```{r include=TRUE, fig.height=6}
+# Read in a polygon of cm_lists[] output from run-climate-metrics.R
+cmDir <- "/media/spin/cbi/CBREC-LCA/CBREC_output/2020_06_harvests/cm_gross_emissions/2020_06_30/"
+files <- dir(cmDir, full.names = T)
+cm_list <- readRDS(files[[1000]])
+rm(files)
+
+#Load AGWP scenario matrices
+AGWPMat <- list(
+  CO2 = as.matrix(read.csv("/media/spin/cbi/CBREC-LCA/CBREC_input_data/climate_metrics/AGWPScenarioCO2Mat_2020-2-27.csv", header=FALSE)),
+  CH4 = as.matrix(read.csv("/media/spin/cbi/CBREC-LCA/CBREC_input_data/climate_metrics/AGWPScenarioCH4Mat_2020-2-27.csv", header=FALSE)),
+  N2O = as.matrix(read.csv("/media/spin/cbi/CBREC-LCA/CBREC_input_data/climate_metrics/AGWPScenarioN2OMat_2020-2-27.csv", header=FALSE)))
+
+#Load AGTP scenario matrices
+AGTPMat <- list(
+  CO2 = as.matrix(read.csv("/media/spin/cbi/CBREC-LCA/CBREC_input_data/climate_metrics/AGTPScenarioCO2Mat_2020-6-30.csv", header=FALSE)),
+  CH4 = as.matrix(read.csv("/media/spin/cbi/CBREC-LCA/CBREC_input_data/climate_metrics/AGTPScenarioCH4Mat_2020-6-30.csv", header=FALSE)),
+  N2O = as.matrix(read.csv("/media/spin/cbi/CBREC-LCA/CBREC_input_data/climate_metrics/AGTPScenarioN2OMat_2020-6-30.csv", header=FALSE)))
+
+# Load use and ref cases
+useCaseList <- cm_list$use[names(cm_list$use) %in% scen_mat$Use]
+refCaseList <- cm_list$ref[names(cm_list$ref) %in% scen_mat$Ref]
+
+# Choose a use and ref case to explore
+useCaseID <- names(useCaseList)[2]
+refCaseID <- as.character(scen_mat[Use==useCaseID,Ref][1])
+useCase <- useCaseList[[useCaseID]]
+refCase <- refCaseList[[refCaseID]]
+
+# Load GHG mass profiles
+useCO2Mass <- useCase$CO2.mass$total.CO2_tonnes
+refCO2Mass <- refCase$CO2.mass$total.CO2_tonnes
+netCO2Mass <- useCO2Mass - refCO2Mass
+
+useCH4Mass <- useCase$CH4.mass$total.CH4_tonnes
+refCH4Mass <- refCase$CH4.mass$total.CH4_tonnes
+netCH4Mass <- useCH4Mass - refCH4Mass
+
+useN2OMass <- useCase$N2O.mass$total.N2O_tonnes
+refN2OMass <- refCase$N2O.mass$total.N2O_tonnes
+netN2OMass <- useN2OMass - refN2OMass
+
+# Load climate metric profiles from run-climate-metrics.R output
+useAGWP <- useCase$CO2.AGWP$total.CO2_W_m2 + useCase$CH4.AGWP$total.CH4_W_m2 + useCase$N2O.AGWP$total.N2O_W_m2
+refAGWP <- refCase$CO2.AGWP$total.CO2_W_m2 + refCase$CH4.AGWP$total.CH4_W_m2 + refCase$N2O.AGWP$total.N2O_W_m2
+netAGWP <- useAGWP - refAGWP
+
+useAGTP <- useCase$CO2.AGTP$total.CO2_K + useCase$CH4.AGTP$total.CH4_K + useCase$N2O.AGTP$total.N2O_K
+refAGTP <- refCase$CO2.AGTP$total.CO2_K + refCase$CH4.AGTP$total.CH4_K + refCase$N2O.AGTP$total.N2O_K
+netAGTP <- useAGTP - refAGTP
+
+# Calculate CO2e for climate metric profiles form run-climate-metrics.R output
+CO2_pulse <- c(1000,rep_len(0,99)) # Year one pulse emission profile (units are kg / yr)
+CO2_pulseAGWP <- as.vector(AGWPMat$CO2 %*% as.matrix(CO2_pulse))
+CO2_pulseAGTP <- as.vector(AGTPMat$CO2 %*% as.matrix(CO2_pulse))
+
+useAGWP_CO2e_value <- useAGWP[100] / CO2_pulseAGWP[100]
+useAGWP_CO2e_profile <- as.vector(AGWPMat$CO2 %*% as.matrix(c(useAGWP_CO2e_value * 1000,rep_len(0,99))))
+
+refAGWP_CO2e_value <- refAGWP[100] / CO2_pulseAGWP[100]
+refAGWP_CO2e_profile <- as.vector(AGWPMat$CO2 %*% as.matrix(c(refAGWP_CO2e_value * 1000,rep_len(0,99))))
+
+netAGWP_CO2e_value <- netAGWP[100] / CO2_pulseAGWP[100]
+netAGWP_CO2e_profile <- as.vector(AGWPMat$CO2 %*% as.matrix(c(netAGWP_CO2e_value * 1000,rep_len(0,99))))
+
+useAGTP_CO2e_value <- useAGTP[100] / CO2_pulseAGTP[100]
+useAGTP_CO2e_profile <- as.vector(AGTPMat$CO2 %*% as.matrix(c(useAGTP_CO2e_value * 1000,rep_len(0,99))))
+
+refAGTP_CO2e_value <- refAGTP[100] / CO2_pulseAGTP[100]
+refAGTP_CO2e_profile <- as.vector(AGTPMat$CO2 %*% as.matrix(c(refAGTP_CO2e_value * 1000,rep_len(0,99))))
+
+netAGTP_CO2e_value <- netAGTP[100] / CO2_pulseAGTP[100]
+netAGTP_CO2e_profile <- as.vector(AGTPMat$CO2 %*% as.matrix(c(netAGTP_CO2e_value * 1000,rep_len(0,99))))
+
+# Visualize climate metric profiles from run-climate-metrics.R output
+cmToPlot <- rbind(data.table(year=1:100,value=useAGWP * 1E7,case="Use",cm="AGWP (w/m2 yr * 10^-7)",unit="Actual"),
+                  data.table(year=1:100,value=refAGWP * 1E7,case="Ref",cm="AGWP (w/m2 yr * 10^-7)",unit="Actual"),
+                  data.table(year=1:100,value=netAGWP * 1E7,case="Net",cm="AGWP (w/m2 yr * 10^-7)",unit="Actual"),
+                  data.table(year=1:100,value=useAGWP_CO2e_profile * 1E7,case="Use",cm="AGWP (w/m2 yr * 10^-7)",unit="CO2e"),
+                  data.table(year=1:100,value=refAGWP_CO2e_profile * 1E7,case="Ref",cm="AGWP (w/m2 yr * 10^-7)",unit="CO2e"),
+                  data.table(year=1:100,value=netAGWP_CO2e_profile * 1E7,case="Net",cm="AGWP (w/m2 yr * 10^-7)",unit="CO2e"),
+                  data.table(year=1:100,value=useAGTP * 1E10,case="Use",cm="AGTP (K * 10^-10)",unit="Actual"),
+                  data.table(year=1:100,value=refAGTP * 1E10,case="Ref",cm="AGTP (K * 10^-10)",unit="Actual"),
+                  data.table(year=1:100,value=netAGTP * 1E10,case="Net",cm="AGTP (K * 10^-10)",unit="Actual"),
+                  data.table(year=1:100,value=useAGTP_CO2e_profile * 1E10,case="Use",cm="AGTP (K * 10^-10)",unit="CO2e"),
+                  data.table(year=1:100,value=refAGTP_CO2e_profile * 1E10,case="Ref",cm="AGTP (K * 10^-10)",unit="CO2e"),
+                  data.table(year=1:100,value=netAGTP_CO2e_profile * 1E10,case="Net",cm="AGTP (K * 10^-10)",unit="CO2e"))
+ggplot(data=cmToPlot, aes(x=year)) +
+  geom_line(aes(y=value, color=case, linetype=unit)) +
+  facet_wrap(~cm, scales="free") +
+  labs(x="Year",
+       y="Climate Metric Value",
+       title = "Visualize Atmospheric Response and CO2e Using CM from run-climate-metrics.R",
+       subtitle = paste0("Clearcut, 30% Piles, All Tech Recoverable, No RX Burn\nNet AGTP CO2e = ",
+                         as.character(round(netAGTP_CO2e_value))," MT\nNet AGWP CO2e = ",as.character(round(netAGWP_CO2e_value))," MT"),
+       color="Case",
+       linetype="Emission Profile") +
+  guides(color=guide_legend(title.position = "top",title.hjust = 0.5),
+         linetype=guide_legend(title.position = "top",title.hjust = 0.5))
+
+#Visualize mass profiles
+massToPlot <- rbind(data.table(year=1:100,value=useCO2Mass,species="CO2",case="Use"),
+                    data.table(year=1:100,value=refCO2Mass,species="CO2",case="Ref"),
+                    data.table(year=1:100,value=netCO2Mass,species="CO2",case="Net"),
+                    data.table(year=1:100,value=useCH4Mass,species="CH4",case="Use"),
+                    data.table(year=1:100,value=refCH4Mass,species="CH4",case="Ref"),
+                    data.table(year=1:100,value=netCH4Mass,species="CH4",case="Net"))
+ggplot(data=massToPlot, aes(x=year,y=value)) +
+  geom_line(aes(color=case)) +
+  facet_wrap(~species, scales="free") +
+  labs(x="Year",
+       y="Metric Tons",
+       title="GHG Mass Emission Profiles",
+       subtitle = paste0("Clearcut, 30% Piles, All Tech Recoverable, No RX Burn\nNet AGTP CO2e = ",
+                         as.character(round(netAGTP_CO2e_value))," MT\nNet AGWP CO2e = ",as.character(round(netAGWP_CO2e_value))," MT"),
+       color="Case") +
+  guides(color=guide_legend(title.position = "top",title.hjust = 0.5))
+```
+
+## Replicate older code with actual emission profile
+```{r include=TRUE, fig.height=6}
+CO2_scenario <- netCO2Mass * 1000
+CH4_scenario <- netCH4Mass * 1000
+N2O_scenario <- netN2OMass * 1000
+CO2_pulse_1kg <- c(1,rep_len(0,99))
+
+AGWP_CO2_pulse_1kg_Wm2yr <- as.vector(AGWPMat$CO2 %*% as.matrix(CO2_pulse_1kg))
+AGTP_CO2_pulse_1kg_K <- as.vector(AGTPMat$CO2 %*% as.matrix(CO2_pulse_1kg))
+
+# Calculate AGWP for scenario emissions (units are (W/m^2)-yr)
+AGWP_scenario <- list(profiles = data.table(CO2_Wm2yr = as.vector(AGWPMat$CO2 %*% as.matrix(CO2_scenario)),
+                                            CH4_Wm2yr = as.vector(AGWPMat$CH4 %*% as.matrix(CH4_scenario)),
+                                            N2O_Wm2yr = as.vector(AGWPMat$N2O %*% as.matrix(N2O_scenario))))
+AGWP_scenario$profiles[,total_Wm2yr := CO2_Wm2yr + CH4_Wm2yr + N2O_Wm2yr]
+AGWP_scenario$CO2e_TH20yr_kg <- AGWP_scenario$profiles$total_Wm2yr[20] / AGWP_CO2_pulse_1kg_Wm2yr[20]
+AGWP_scenario$CO2e_TH100yr_kg <- AGWP_scenario$profiles$total_Wm2yr[100] / AGWP_CO2_pulse_1kg_Wm2yr[100]
+AGWP_scenario$profiles[,CO2e_TH20yr_check_Wm2yr := as.vector(AGWPMat$CO2 %*% as.matrix(c(AGWP_scenario$CO2e_TH20yr_kg,rep_len(0,99))))]
+AGWP_scenario$profiles[,CO2e_TH100yr_check_Wm2yr := as.vector(AGWPMat$CO2 %*% as.matrix(c(AGWP_scenario$CO2e_TH100yr_kg,rep_len(0,99))))]
+
+# Calculate AGTP for scenario emissions (units are K)
+AGTP_scenario <- list(profiles = data.table(CO2_K = as.vector(AGTPMat$CO2 %*% as.matrix(CO2_scenario)),
+                                            CH4_K = as.vector(AGTPMat$CH4 %*% as.matrix(CH4_scenario)),
+                                            N2O_K = as.vector(AGTPMat$N2O %*% as.matrix(N2O_scenario))))
+AGTP_scenario$profiles[,total_K := CO2_K + CH4_K + N2O_K]
+AGTP_scenario$CO2e_TH20yr_kg <- AGTP_scenario$profiles$total_K[20] / AGTP_CO2_pulse_1kg_K[20]
+AGTP_scenario$CO2e_TH100yr_kg <- AGTP_scenario$profiles$total_K[100] / AGTP_CO2_pulse_1kg_K[100]
+AGTP_scenario$profiles[,CO2e_TH20yr_check_K := as.vector(AGTPMat$CO2 %*% as.matrix(c(AGTP_scenario$CO2e_TH20yr_kg,rep_len(0,99))))]
+AGTP_scenario$profiles[,CO2e_TH100yr_check_K := as.vector(AGTPMat$CO2 %*% as.matrix(c(AGTP_scenario$CO2e_TH100yr_kg,rep_len(0,99))))]
+
+# Confirm AGWP CO2e Method
+AGWP_CO2e_plot <- melt(data=AGWP_scenario$profiles[,.(year=seq(1,100,1),total_Wm2yr,CO2e_TH20yr_check_Wm2yr,CO2e_TH100yr_check_Wm2yr)],
+                       id.vars = "year")
+ggplot(data=AGWP_CO2e_plot,aes(x=year,y=value)) +
+  geom_line(aes(color=variable)) +
+  labs(title="Confirm AGWP CO2e Method - Real Emissions Profile",
+       x="Year",
+       y="AGWP (W/m^2 year)") +
+  annotate("text", x=50, y=2E-8, label="Scenario") +
+  annotate("text", x=75, y=6E-8, label=paste0("CO2e TH20yr\n",round(AGWP_scenario$CO2e_TH20yr_kg,2)," kg")) +
+  annotate("text", x=25, y=1E-8, label=paste0("CO2e TH100yr\n",round(AGWP_scenario$CO2e_TH100yr_kg,2)," kg"))
+
+AGTP_CO2e_plot <- melt(data=AGTP_scenario$profiles[,.(year=seq(1,100,1),total_K,CO2e_TH20yr_check_K,CO2e_TH100yr_check_K)],
+                       id.vars = "year")
+ggplot(data=AGTP_CO2e_plot,aes(x=year,y=value)) +
+  geom_line(aes(color=variable)) +
+  labs(title="Confirm AGTP CO2e Method - Real Emissions Profile",
+       x="Year",
+       y="AGTP (K)") +
+  annotate("text", x=15, y=7.5E-10, label="Scenario") +
+  annotate("text", x=75, y=6E-10, label=paste0("CO2e TH20yr\n",round(AGTP_scenario$CO2e_TH20yr_kg,2)," kg")) +
+  annotate("text", x=25, y=5E-10, label=paste0("CO2e TH100yr\n",round(AGTP_scenario$CO2e_TH100yr_kg,2)," kg"))
+```
+
+## Replicate older code with original fake emissions profile
+```{r include=TRUE, fig.height=6}
+CO2_scenario <- c(rep_len(5,20),rep_len(10,20),rep_len(1,20),rep_len(15,20),rep_len(3,20))
+CH4_scenario <- c(rep_len(0.05,20),rep_len(0.1,20),rep_len(0.01,20),rep_len(0.15,20),rep_len(0.03,20))
+N2O_scenario <- c(rep_len(0.005,20),rep_len(0.01,20),rep_len(0.001,20),rep_len(0.015,20),rep_len(0.003,20))
+CO2_pulse_1kg <- c(1,rep_len(0,99))
+
+AGWP_CO2_pulse_1kg_Wm2yr <- as.vector(AGWPMat$CO2 %*% as.matrix(CO2_pulse_1kg))
+AGTP_CO2_pulse_1kg_K <- as.vector(AGTPMat$CO2 %*% as.matrix(CO2_pulse_1kg))
+
+# Calculate AGWP for scenario emissions (units are (W/m^2)-yr)
+AGWP_scenario <- list(profiles = data.table(CO2_Wm2yr = as.vector(AGWPMat$CO2 %*% as.matrix(CO2_scenario)),
+                                            CH4_Wm2yr = as.vector(AGWPMat$CH4 %*% as.matrix(CH4_scenario)),
+                                            N2O_Wm2yr = as.vector(AGWPMat$N2O %*% as.matrix(N2O_scenario))))
+AGWP_scenario$profiles[,total_Wm2yr := CO2_Wm2yr + CH4_Wm2yr + N2O_Wm2yr]
+AGWP_scenario$CO2e_TH20yr_kg <- AGWP_scenario$profiles$total_Wm2yr[20] / AGWP_CO2_pulse_1kg_Wm2yr[20]
+AGWP_scenario$CO2e_TH100yr_kg <- AGWP_scenario$profiles$total_Wm2yr[100] / AGWP_CO2_pulse_1kg_Wm2yr[100]
+AGWP_scenario$profiles[,CO2e_TH20yr_check_Wm2yr := as.vector(AGWPMat$CO2 %*% as.matrix(c(AGWP_scenario$CO2e_TH20yr_kg,rep_len(0,99))))]
+AGWP_scenario$profiles[,CO2e_TH100yr_check_Wm2yr := as.vector(AGWPMat$CO2 %*% as.matrix(c(AGWP_scenario$CO2e_TH100yr_kg,rep_len(0,99))))]
+
+# Calculate AGTP for scenario emissions (units are K)
+AGTP_scenario <- list(profiles = data.table(CO2_K = as.vector(AGTPMat$CO2 %*% as.matrix(CO2_scenario)),
+                                            CH4_K = as.vector(AGTPMat$CH4 %*% as.matrix(CH4_scenario)),
+                                            N2O_K = as.vector(AGTPMat$N2O %*% as.matrix(N2O_scenario))))
+AGTP_scenario$profiles[,total_K := CO2_K + CH4_K + N2O_K]
+AGTP_scenario$CO2e_TH20yr_kg <- AGTP_scenario$profiles$total_K[20] / AGTP_CO2_pulse_1kg_K[20]
+AGTP_scenario$CO2e_TH100yr_kg <- AGTP_scenario$profiles$total_K[100] / AGTP_CO2_pulse_1kg_K[100]
+AGTP_scenario$profiles[,CO2e_TH20yr_check_K := as.vector(AGTPMat$CO2 %*% as.matrix(c(AGTP_scenario$CO2e_TH20yr_kg,rep_len(0,99))))]
+AGTP_scenario$profiles[,CO2e_TH100yr_check_K := as.vector(AGTPMat$CO2 %*% as.matrix(c(AGTP_scenario$CO2e_TH100yr_kg,rep_len(0,99))))]
+
+# Confirm AGWP CO2e Method
+AGWP_CO2e_plot <- melt(data=AGWP_scenario$profiles[,.(year=seq(1,100,1),total_Wm2yr,CO2e_TH20yr_check_Wm2yr,CO2e_TH100yr_check_Wm2yr)],
+                       id.vars = "year")
+ggplot(data=AGWP_CO2e_plot,aes(x=year,y=value)) +
+  geom_line(aes(color=variable)) +
+  labs(title="Confirm AGWP CO2e Method - Old Fake Emissions Profile",
+       x="Year",
+       y="AGWP (W/m^2 year)") +
+  annotate("text", x=70, y=3E-11, label="Scenario") +
+  annotate("text", x=75, y=1E-11, label=paste0("CO2e TH20yr\n",round(AGWP_scenario$CO2e_TH20yr_kg,2)," kg")) +
+  annotate("text", x=25, y=2E-11, label=paste0("CO2e TH100yr\n",round(AGWP_scenario$CO2e_TH100yr_kg,2)," kg"))
+
+AGTP_CO2e_plot <- melt(data=AGTP_scenario$profiles[,.(year=seq(1,100,1),total_K,CO2e_TH20yr_check_K,CO2e_TH100yr_check_K)],
+                       id.vars = "year")
+ggplot(data=AGTP_CO2e_plot,aes(x=year,y=value)) +
+  geom_line(aes(color=variable)) +
+  labs(title="Confirm AGTP CO2e Method - Old Fake Emissions Profile",
+       x="Year",
+       y="AGTP (K)") +
+  annotate("text", x=75, y=6.25E-14, label="Scenario") +
+  annotate("text", x=87.5, y=4.3E-14, label=paste0("CO2e TH20yr\n",round(AGTP_scenario$CO2e_TH20yr_kg,2)," kg")) +
+  annotate("text", x=50, y=8.65E-14, label=paste0("CO2e TH100yr\n",round(AGTP_scenario$CO2e_TH100yr_kg,2)," kg"))
+```
