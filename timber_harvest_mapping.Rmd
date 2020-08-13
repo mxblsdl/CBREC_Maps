@@ -10,11 +10,6 @@ output:
 Create final maps from CBREC outputs for use in results report
   
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = F)
-knitr::opts_chunk$set(include = F)
-
-options(scipen = 10)
-
 knitr::opts_knit$set(root.dir = rprojroot::find_rstudio_root_file())
 ```
 
@@ -23,8 +18,8 @@ Load libraries and helper functions
 
 Set user defined variables
 ```{r results='hide'}
-source("R/CBI_postFunctions.R")
-source("R/CBI_filterHarvests.R")
+#source("R/CBI_postFunctions.R")
+#source("R/CBI_filterHarvests.R")
 
 library(data.table) # data structure
 library(tictoc) # time test
@@ -37,8 +32,6 @@ library(sf)
 
 Define helper functions
 ```{r include=TRUE}
-"%notin%" <- function(x, table) match(x, table, nomatch = 0) == 0
-
 # bind data into data table function; works with specific list structure of outputs
 bindDataTable <- function(data) {
   require(data.table)
@@ -51,6 +44,25 @@ bindDataTable <- function(data) {
       return(d)
     })
   return(tr)
+}
+
+# for use in subsetting the scenario matrix based on map specifications
+scenario_function <- function(scenario_matrix, 
+                              piled, # will be the same for use and reference 
+                              use_collection, 
+                              use_burn,
+                              ref_collection = "No",
+                              ref_burn){
+  
+  use <- subset(scenario_matrix, Fraction_Piled == piled & 
+           Biomass_Collection == use_collection &
+           Burn_Type == use_burn)
+
+  ref <- subset(scenario_matrix, Fraction_Piled == piled & 
+             Biomass_Collection == ref_collection & 
+             Burn_Type == ref_burn)
+ return(list("use_id" = use$ID, 
+             "ref_id"= ref$ID)) 
 }
 
 ## ggplot theme
@@ -67,6 +79,7 @@ theme_set(mxblsdl)
 
 # Load Data
 
+## Model outputs
 First find the model results which are classified by the 'metric', either kWh or MT Recovered.
 ```{r include=TRUE}
 # find all results files
@@ -75,38 +88,15 @@ length(files)
 # find files which are larger than a certain size and have data
 ```
 
-Optional code below in case we need to filter out really small values... Not sure if this will be needed in the long run
-```{r include=TRUE}
-## create empty list
-good_files <- list()
-
-for (i in 1:length(files)) {
-  # save file paths based on criteria 
-  if(1000 < file.size(files[i])) {
-  good_files[[i]] <- files[i]
-  }
-}
-
-# filter out null values
-good_files <- Filter(length, good_files)
-
-# clean up
-rm(files)
-
-# extract polygon names
-polys <- tools::file_path_sans_ext(gsub(".*/", "", unlist(good_files)))
-```
-
-Spatial Data
+## Spatial Data
 These are timber harvests from all years
 
 ```{r}
 sf_path <- dir("CBREC-LCA_timber_activity_polygons_2016-2019", pattern = ".shp$", full.names = T)
-
 harvests <- read_sf(sf_path)
 ```
 
-Scenario data
+## Scenario data
 This includes the scenario pairings and the scenario IDs
 ```{r}
 scenario_paths <- dir("inst", full.names = T)
@@ -118,71 +108,84 @@ scen_mat <- fread(scenario_paths[2])
 scen_mat[, Pulp_Market := NULL]
 
 # inspect
-scen_mat
+head(scen_mat)
 ```
+
+Optional code below in case we need to filter out really small values... Not sure if this will be needed in the long run
+```{r include=TRUE}
+## create empty list
+# good_files <- list()
+# 
+# for (i in 1:length(files)) {
+#   # save file paths based on criteria 
+#   if(1000 < file.size(files[i])) {
+#   good_files[[i]] <- files[i]
+#   }
+# }
+# 
+# # filter out null values
+# good_files <- Filter(length, good_files)
+# 
+# # extract polygon names
+# polys <- tools::file_path_sans_ext(gsub(".*/", "", unlist(good_files)))
+```
+***
 
 Define the use and reference scenarios
 It would be good to make a function here since this will be run a number of times...
 
-Maybe I want to filter the scenario pairings file instead...
+This function is what changes based on the map specifications.
 ```{r}
-use <- 
-  subset(scen_mat, Fraction_Piled == 50 & 
-           Biomass_Collection == "All Tech Recoverable" &
-           Burn_Type == "Broadcast")
-
-# get ids
-use_ids <- use$ID
-
-ref <- 
-  subset(scen_mat, Fraction_Piled == 50 & 
-           Biomass_Collection == "No" & 
-           Burn_Type == "Pile and Broadcast")
-
-# get ids
-ref_ids <- ref$ID
+ids <- scenario_function(scenario_matrix = scen_mat,
+                  piled = 50,
+                  use_collection = "All Tech Recoverable",
+                  use_burn = "None",
+                  ref_burn = "None")
 ```
 
-# Extract polygons names
-This is an important step in that it ties the model output data back to the polygons. This will be joined back with the data once it is in a simple data.table format. The length of `polys` and the resultant `data` must be the same length
-```{r}
-polys <- tools::file_path_sans_ext(gsub(".*/", "", unlist(files)))
-```
+# Read the output data and filter based on the scenarios
 
-Read the output data and filter based on the scenarios
-
-Data is structured in a list format only showing the time series emissions. I need to filter based on teh Use first and then reference. The net emissions for each category are shown in the name of the list.
+Data is structured in a list format only showing the time series emissions. I need to filter based on the Use first and then reference. The net emissions for each category are shown in the name of the list.
 
 ```{r include=TRUE}
-# read files (wrap into filtering)
-# Filter based on reference ids first
+# Read and filter based on reference ids first
 data <- lapply(files, function(file) {
   dat <-
     readRDS(file)
-  da <- dat[grepl(paste0("\\b", ref_ids, "\\b", collapse = "|"), names(dat))]
+  # get polygon number
+  poly_num <- tools::file_path_sans_ext(gsub(".*/", "", unlist(file)))
+
+  da <- dat[grepl(paste0("\\b", ids[["ref_id"]], "\\b", collapse = "|"), names(dat))]
+  
+  # attach polygon number
+  da[["poly_num"]] <- poly_num
   return(da)
 })
 
 # simplify list structure
-data <- unlist(data, recursive = F) # retain list structure
+#data <- unlist(data, recursive = F) # retain list structure
 
 ## May not need this second filter
 # Further filter based on selected use case
-data <-
-  lapply(data, function(file) {
-    file[grepl(paste0("\\b", use_ids, "\\b", collapse = "|"), names(file))]
-  })
+# data <-
+#   lapply(data, function(file) {
+#     file[grepl(paste0("\\b", use_ids, "\\b", collapse = "|"), names(file))]
+#   })
 
 # simplify list structure
-data <- unlist(data, recursive = F)
+#data <- unlist(data, recursive = F)
 ```
 
 # Extract important information from data
 
+Bind the polygon number to the values as well. The polygon number or `poly_num` will be used to join the spatial data. 
 ```{r}
 out <- lapply(data, function(d) {
-  d[, .(net.MT_CO2e.AGWP.100yr, net.MT_CO2e.AGTP.100yr)] %>% 
+  # AGWP and AGTP are both the same for every year of the time series
+  vals <- d[[1]]$time_series[, .(net.MT_CO2e.AGWP.100yr, net.MT_CO2e.AGTP.100yr)] %>% 
     distinct()
+  
+  return(cbind(d$poly_num, vals))
 })
 
 # bind together
@@ -190,20 +193,20 @@ data <- rbindlist(out)
 ```
 
 # Bind with spatial data
-TODO this would be better to preserve in the data somehow rather than binding together
 
 ```{r}
-data <- cbind(polys, data)
-
 # TODO check on this
 # convert data to correct units; This is the difference between MT and grams
 data <-
   data %>%
-  mutate(AGTP_co2e = AGTP_co2e * 1000000)
+  mutate(AGTP_co2e = net.MT_CO2e.AGTP.100yr * 1000000,
+         AGWP_co2e = net.MT_CO2e.AGWP.100yr * 1000000)
+
+# set names for join
+setnames(data, 'V1', 'polys')
 
 # rename ID for join
-harvests <- 
-    harvests %>%
+harvests <- harvests %>%
       rename(polys = OBJECTID) %>%
       mutate(polys = as.character(polys))
 
@@ -214,9 +217,40 @@ data <- left_join(data, harvests, by = "polys")
 # Plotting
 ## Historgram with nice gradient
 
+```{r}
+g <-
+  data %>% 
+  filter(AGTP_co2e < 1000) %>% 
+  ggplot(aes(x = AGTP_co2e, fill = ..x..)) +
+  theme_minimal() +
+  geom_histogram(binwidth = 10, show.legend = F) +
+  scale_fill_gradient(low = "#63B8FF", high = "#CD950C") +
+  labs(title = "No Burn Counterfactul",
+       x = expression("grams CO"[2]~"e per kWh"),
+       y = "Count") +
+  theme(text = element_text(size = 16))
+g
+```
+
+
 # Write for use in QGIS
 
 ```{r}
+write_sf(data, "Q/input/harvests.gpkg", layer = "Pile and Broadcast", delete_layer = T)
+write_sf(data, "Q/input/harvests.gpkg", layer = "None", delete_layer = T)
+```
 
+# clean up the database as needed
+I wrote some tbales under the wrong name at first. Remove these to keep the db svelt.
+```{r}
+library(RSQLite)
+db = SQLite()
+con = dbConnect(db,"Q/input/harvests.gpkg")
+
+dbListTables(con)
+
+dbRemoveTable(con, "agtp")
+
+dbDisconnect(con)
 ```
 
