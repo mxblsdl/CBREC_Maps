@@ -7,17 +7,21 @@ output:
 ---
 
 # Purpose
+
 Create final maps from CBREC outputs for use in results report
-  
+
 ```{r setup, include=FALSE}
 knitr::opts_knit$set(root.dir = rprojroot::find_rstudio_root_file())
 ```
 
 # Setup
+
 Set user defined variables
 
 ## Define Scenarios
-These are variables that set the definition of the scenario. I could move the functional unit into this 
+
+These are variables that set the definition of the scenario. I could move the functional unit into this
+
 ```{r}
 #ref_scen <- "Pile and Broadcast"
 ref_scen <- "None"
@@ -39,6 +43,7 @@ library(sf)
 ```
 
 Define helper functions
+
 ```{r include=TRUE}
 # bind data into data table function; works with specific list structure of outputs
 bindDataTable <- function(data) {
@@ -61,7 +66,7 @@ scenario_function <- function(scenario_matrix,
                               use_burn,
                               ref_collection = "No",
                               ref_burn,
-                              negate_ref){
+                              negate_ref = F){
   
   use <- subset(scenario_matrix, Fraction_Piled == piled & 
            Biomass_Collection == use_collection &
@@ -97,8 +102,9 @@ theme_set(mxblsdl)
 # Load Data
 
 ## Model outputs
-First find the model results which are classified by the 'metric', either kWh or MT Recovered.
-Using MT Recovered per Kevin's email.
+
+First find the model results which are classified by the 'metric', either kWh or MT Recovered. Using MT Recovered per Kevin's email.
+
 ```{r include=TRUE}
 # find all results files
 files <- dir("CBREC_Model_Output/MTrecovered", full.names = T, recursive = T)
@@ -107,6 +113,7 @@ length(files)
 ```
 
 ## Spatial Data
+
 These are timber harvests from all years
 
 ```{r}
@@ -115,7 +122,9 @@ harvests <- read_sf(sf_path)
 ```
 
 ## Scenario data
+
 This includes the scenario pairings and the scenario IDs
+
 ```{r}
 scenario_paths <- dir("inst", full.names = T)
 
@@ -129,10 +138,10 @@ scen_mat[, Pulp_Market := NULL]
 head(scen_mat)
 ```
 
-Define the use and reference scenarios
-It would be good to make a function here since this will be run a number of times...
+Define the use and reference scenarios It would be good to make a function here since this will be run a number of times...
 
 This function is what changes based on the map specifications.
+
 ```{r}
 ids <- scenario_function(scenario_matrix = scen_mat,
                   piled = 50,
@@ -145,9 +154,8 @@ poly_num <- tools::file_path_sans_ext(gsub(".*/", "", unlist(files)))
 
 # Read the output data and filter based on the scenarios
 
-Data is structured in a list format only showing the time series emissions. I need to filter based on the Use first and then reference. The net emissions for each category are shown in the name of the list.
-#TODO
-filter by reference as well.
+Data is structured in a list format only showing the time series emissions. I need to filter based on the Use first and then reference. The net emissions for each category are shown in the name of the list. \#TODO filter by reference as well.
+
 ```{r include=TRUE}
 # Read and filter based on reference ids first
 data <- lapply(files, function(file) {
@@ -178,7 +186,8 @@ data <- unlist(data, recursive = F)
 
 # Extract important information from data
 
-Bind the polygon number to the values as well. The polygon number or `poly_num` will be used to join the spatial data. 
+Bind the polygon number to the values as well. The polygon number or `poly_num` will be used to join the spatial data.
+
 ```{r}
 out <- lapply(data, function(d) {
   # AGWP and AGTP are both the same for every year of the time series
@@ -231,6 +240,7 @@ filtered_data <- data %>%
 ```
 
 # Plotting
+
 ## Historgram with nice gradient
 
 ```{r}
@@ -263,16 +273,14 @@ ids <- scenario_function(scenario_matrix = scen_mat,
                   ref_burn = "None", 
                   negate_ref = T)
 # special reference for Rx purn
-# ref <- subset(scenario_matrix, Fraction_Piled == piled & 
-#              Biomass_Collection == ref_collection & 
-#              Burn_Type != "None")
 
+# filter by reference ID
 data <- lapply(files, function(file) {
   dat <- readRDS(file)
   da <- dat[grepl(paste0("\\b", ids[["ref_id"]], "\\b", collapse = "|"), names(dat))]
   return(da)
 })
-
+# filter by Use ID
 data <- lapply(data, function(d) {
   da <- d[grepl(paste0("\\b", ids[["use_id"]], "\\b", collapse = "|"), names(d))]
   return(da)
@@ -283,10 +291,10 @@ data <- unlist(data, recursive = F)
 
 # Missing SOX NEED TO EMAIL ABOUT
 out <- lapply(data, function(d) {
-  # AGWP and AGTP are both the same for every year of the time series
   vals <- d$time_series[, .(net.CH4_MTperMT_Mobilized,
                             net.N2O_MTperMT_Mobilized,
                             net.PM2.5_MTperMT_Mobilized,
+                            # Missing SOX
                             MT_Residue_Mobilized, 
                             MT_Residue_Mobilized_perAcre)] %>%
     slice(1)
@@ -305,22 +313,32 @@ data[["poly_num"]] <- poly_num
 ```{r}
 # TODO check on units
 # convert data to correct units; This is the difference between MT and grams
-data <-data %>% 
-  mutate(AGTP_co2e_kg = net.MT_CO2e.AGTP.100yr * 1000,
-         AGWP_co2e_kg = net.MT_CO2e.AGWP.100yr * 1000)
+# data <-data %>% 
+#   mutate(AGTP_co2e_kg = net.MT_CO2e.AGTP.100yr * 1000,
+#          AGWP_co2e_kg = net.MT_CO2e.AGWP.100yr * 1000)
 
 # join by polygon ID
 data <- left_join(data, harvests, by = "poly_num")
 ```
 
 Filter data based on size of harvest
+
 ```{r}
 filtered_data <- data %>% 
   filter(MT_Residue_Mobilized >= 1)
 ```
 
+## Output
 
 ```{r}
 write_sf(filtered_data, "Q/input/harvests.gpkg", layer = "criteriants", delete_layer = T)
 ```
 
+# check layers
+```{r}
+st_layers("Q/input/harvests.gpkg")
+```
+
+
+## TODO
+Need to add in the code to generate the ten year averages...

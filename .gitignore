@@ -6,3 +6,5 @@
 CBREC_Model_Output
 input/
 *.gpkg
+
+output/
