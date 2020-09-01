@@ -15,3 +15,11 @@ b. Actual treatment. 50% piled, All Tech Recoverable collected, No burn referenc
 a. Where reference case is Rx burn, net scenario emissions are Year 1 use case emissions – year 1 reference case emissions
 
 b. Where reference case is no burn, net scenario emissions are Year 1 use case -  average annual reference case emission over the first 10 years
+
+## Units
+MT emission/MT residue
+kg emission/MWh for the respective figures.
+
+## Map Stats
+legend symbol size 6
+

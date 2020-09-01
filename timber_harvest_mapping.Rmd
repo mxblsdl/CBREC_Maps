@@ -23,13 +23,17 @@ Set user defined variables
 These are variables that set the definition of the scenario. I could move the functional unit into this
 
 ```{r}
-#ref_scen <- "Pile and Broadcast"
-ref_scen <- "None"
+ref_scen <- "Pile and Broadcast"
+#ref_scen <- "None"
+
+# set functional unit
+funit <- "MTrecovered"
+# funit <- "kWh"
 ```
 
 Load libraries and helper functions
 
-```{r results='hide'}
+```{r results='hide', message = F}
 #source("R/CBI_postFunctions.R")
 #source("R/CBI_filterHarvests.R")
 
@@ -105,9 +109,10 @@ theme_set(mxblsdl)
 
 First find the model results which are classified by the 'metric', either kWh or MT Recovered. Using MT Recovered per Kevin's email.
 
+Using `MTrecovered` as the functional unit. This may change to be functional unit `kWh` as well.
 ```{r include=TRUE}
 # find all results files
-files <- dir("CBREC_Model_Output/MTrecovered", full.names = T, recursive = T)
+files <- dir(glue::glue("CBREC_Model_Output/{funit}"), full.names = T, recursive = T)
 length(files)
 # find files which are larger than a certain size and have data
 ```
@@ -154,7 +159,7 @@ poly_num <- tools::file_path_sans_ext(gsub(".*/", "", unlist(files)))
 
 # Read the output data and filter based on the scenarios
 
-Data is structured in a list format only showing the time series emissions. I need to filter based on the Use first and then reference. The net emissions for each category are shown in the name of the list. \#TODO filter by reference as well.
+Data is structured in a list format only showing the time series emissions. I need to filter based on the Use first and then reference. The net emissions for each category are shown in the name of the list. 
 
 ```{r include=TRUE}
 # Read and filter based on reference ids first
@@ -233,10 +238,10 @@ data <- left_join(data, harvests, by = "poly_num")
 ```
 
 # Filter data based on criteria
-
+Data not being filtered for the maps, but it is being filtered for the histograms
 ```{r}
-filtered_data <- data %>% 
-  filter(MT_Residue_Mobilized >= 1)
+# filtered_data <- data %>% 
+#   filter(MT_Residue_Mobilized >= 1)
 ```
 
 # Plotting
@@ -245,23 +250,57 @@ filtered_data <- data %>%
 
 ```{r}
 if(ref_scen == "None") {t = "No Burn"} else {t = "Pile and Broadcast"}
-#g <-
-filtered_data %>% 
-  ggplot(aes(x = AGTP_co2e_kg, fill = ..x..)) +
+
+# choose metric
+v <- 'net.MT_CO2e.AGTP.100yr' # needs some manual garbage right now
+v <- 'net.MT_CO2e.AGWP.100yr'
+
+if(funit == "MTrecovered") {
+  g <- data[get(v) < quantile(data[[v]], .97), ] %>% 
+  ggplot(aes(x = get(v), fill = ..x..)) +
   theme_minimal() +
-  geom_histogram(binwidth = 10, show.legend = F) +
+  geom_histogram(binwidth = .002, show.legend = F) +
   scale_fill_gradient(low = "#63B8FF", high = "#CD950C") +
-  labs(title = paste(t, "Counterfactul"),
-       x = expression("kilograms CO"[2]~"e per MT Recovered"),
+  labs(title = glue::glue("{t} Counterfactul"),
+       x = expression("MT CO"[2]~"e per MT Recovered"), # dang expression...
        y = "Count") +
-  theme(text = element_text(size = 16))
+  theme(text = element_text(size = 16))  
+} else {
+  g <- data[get(v) < quantile(data[[v]], .97), ] %>% 
+  ggplot(aes(x = get(v), fill = ..x..)) +
+  theme_minimal() +
+  geom_histogram(binwidth = .002, show.legend = F) +
+  scale_fill_gradient(low = "#63B8FF", high = "#CD950C") +
+  labs(title = glue::glue("{t} Counterfactul"),
+       x = expression("MT CO"[2]~"e per kWh"), # dang expression...
+       y = "Count") +
+  theme(text = element_text(size = 16))  
+}
+```
+
+# Write out plot
+
+TODO need to add in AGWP, all plots have been AGTP
+```{r}
+# Get metric
+metric <- gsub("net.MT_CO2e.", "", v) %>% 
+  gsub(".100yr", "", .)
+
+ggsave(plot = g, filename = glue::glue("plots/{t}_{funit}_{metric}.png"),
+       height = 7,
+       width = 12,
+       dpi = 400)
 ```
 
 # Write for use in QGIS
 
 ```{r}
-write_sf(filtered_data, "Q/input/harvests.gpkg", layer = ref_scen, delete_layer = T)
+write_sf(data, 
+         glue::glue("Q/input/harvests_{funit}.gpkg"),
+         layer = ref_scen,
+         delete_layer = T)
 ```
+
 
 # Prepare Data for maps 4-8
 
@@ -311,12 +350,6 @@ data[["poly_num"]] <- poly_num
 # Spatial Join
 
 ```{r}
-# TODO check on units
-# convert data to correct units; This is the difference between MT and grams
-# data <-data %>% 
-#   mutate(AGTP_co2e_kg = net.MT_CO2e.AGTP.100yr * 1000,
-#          AGWP_co2e_kg = net.MT_CO2e.AGWP.100yr * 1000)
-
 # join by polygon ID
 data <- left_join(data, harvests, by = "poly_num")
 ```
@@ -324,19 +357,121 @@ data <- left_join(data, harvests, by = "poly_num")
 Filter data based on size of harvest
 
 ```{r}
-filtered_data <- data %>% 
-  filter(MT_Residue_Mobilized >= 1)
+# filtered_data <- data %>% 
+#   filter(MT_Residue_Mobilized >= 1)
 ```
 
 ## Output
 
+Prepare the histograms
 ```{r}
-write_sf(filtered_data, "Q/input/harvests.gpkg", layer = "criteriants", delete_layer = T)
+if(funit == "MTrecovered") {
+  # string designating reference scenario
+  t = "Prescription Burn"
+  
+  # NOTE need to change xaxis label expression
+  ch4 <- data %>% 
+    filter(net.CH4_MTperMT_Mobilized < quantile(.$net.CH4_MTperMT_Mobilized, .99)) %>% 
+    ggplot(aes(x = net.CH4_MTperMT_Mobilized, fill = ..x..)) +
+    theme_minimal() +
+    geom_histogram(binwidth = .0001, show.legend = F) +
+    scale_fill_gradient(low = "#63B8FF", high = "#CD950C") +
+    labs(title = glue::glue("{t} Counterfactul"),
+         x = expression("MT CH"[4]~" per MT Recovered"),
+         y = "Count") +
+    theme(text = element_text(size = 16))
+  
+  n2o <- data %>% 
+    filter(net.N2O_MTperMT_Mobilized < quantile(.$net.N2O_MTperMT_Mobilized, .99)) %>% 
+    ggplot(aes(x = net.N2O_MTperMT_Mobilized, fill = ..x..)) +
+    theme_minimal() +
+    geom_histogram(binwidth = .000001, show.legend = F) +
+    scale_fill_gradient(low = "#63B8FF", high = "#CD950C") +
+    labs(title = glue::glue("{t} Counterfactul"),
+         x = expression("MT N"[2]~"O per MT Recovered"),
+         y = "Count") +
+    theme(text = element_text(size = 16))
+  
+  pm25 <- data %>% 
+    filter(net.PM2.5_MTperMT_Mobilized < quantile(.$net.PM2.5_MTperMT_Mobilized, .99)) %>% 
+    ggplot(aes(x = net.PM2.5_MTperMT_Mobilized, fill = ..x..)) +
+    theme_minimal() +
+    geom_histogram(binwidth = .0001, show.legend = F) +
+    scale_fill_gradient(low = "#63B8FF", high = "#CD950C") +
+    labs(title = glue::glue("{t} Counterfactul"),
+         x = expression("MT PM 2.5 per MT Recovered"),
+         y = "Count") +
+    theme(text = element_text(size = 16))  
+} else {
+  # string designating reference scenario
+  t = "Prescription Burn"
+  
+  # NOTE need to change xaxis label expression
+  ch4 <- data %>% 
+    filter(net.CH4_MTperMT_Mobilized < quantile(.$net.CH4_MTperMT_Mobilized, .99)) %>% 
+    ggplot(aes(x = net.CH4_MTperMT_Mobilized, fill = ..x..)) +
+    theme_minimal() +
+    geom_histogram(binwidth = .0001, show.legend = F) +
+    scale_fill_gradient(low = "#63B8FF", high = "#CD950C") +
+    labs(title = glue::glue("{t} Counterfactul"),
+         x = expression("MT CH"[4]~" per MT kWh"),
+         y = "Count") +
+    theme(text = element_text(size = 16))
+  
+  n2o <- data %>% 
+    filter(net.N2O_MTperMT_Mobilized < quantile(.$net.N2O_MTperMT_Mobilized, .99)) %>% 
+    ggplot(aes(x = net.N2O_MTperMT_Mobilized, fill = ..x..)) +
+    theme_minimal() +
+    geom_histogram(binwidth = .000001, show.legend = F) +
+    scale_fill_gradient(low = "#63B8FF", high = "#CD950C") +
+    labs(title = glue::glue("{t} Counterfactul"),
+         x = expression("MT N"[2]~"O per MT kWh"),
+         y = "Count") +
+    theme(text = element_text(size = 16))
+  
+  pm25 <- data %>% 
+    filter(net.PM2.5_MTperMT_Mobilized < quantile(.$net.PM2.5_MTperMT_Mobilized, .99)) %>% 
+    ggplot(aes(x = net.PM2.5_MTperMT_Mobilized, fill = ..x..)) +
+    theme_minimal() +
+    geom_histogram(binwidth = .0001, show.legend = F) +
+    scale_fill_gradient(low = "#63B8FF", high = "#CD950C") +
+    labs(title = glue::glue("{t} Counterfactul"),
+         x = expression("MT PM 2.5 per MT kWh"),
+         y = "Count") +
+    theme(text = element_text(size = 16))
+}
+```
+
+# Write out plot
+
+```{r}
+ggsave(plot = ch4, filename = glue::glue("plots/ch4_{funit}.png"),
+       height = 7,
+       width = 12,
+       dpi = 400)
+
+ggsave(plot = n2o, filename = glue::glue("plots/n2o_{funit}.png"),
+       height = 7,
+       width = 12,
+       dpi = 400)
+
+ggsave(plot = pm25, filename = glue::glue("plots/pm25_{funit}.png"),
+       height = 7,
+       width = 12,
+       dpi = 400)
+```
+
+Write the layers to Qgis
+```{r}
+write_sf(data, 
+         glue::glue("Q/input/harvests_{funit}.gpkg"),
+         layer = "criteriants",
+         delete_layer = T)
 ```
 
 # check layers
 ```{r}
-st_layers("Q/input/harvests.gpkg")
+st_layers(glue::glue("Q/input/harvests_{funit}.gpkg"))
 ```
 
 

@@ -8,3 +8,5 @@ input/
 *.gpkg
 
 output/
+invoices/
+plots/
