@@ -14,32 +14,13 @@ Create final maps from CBREC outputs for use in results report
 knitr::opts_knit$set(root.dir = rprojroot::find_rstudio_root_file())
 ```
 
-# Setup
-
-Set user defined variables
-
-## Define Scenarios
-
-These are variables that set the definition of the scenario. I could move the functional unit into this
-
-```{r}
-ref_scen <- "Pile and Broadcast"
-#ref_scen <- "None"
-
-# set functional unit
-funit <- "MTrecovered"
-# funit <- "kWh"
-```
-
 Load libraries and helper functions
 
 ```{r results='hide', message = F}
 #source("R/CBI_postFunctions.R")
-#source("R/CBI_filterHarvests.R")
+source("R/CBI_mapCreation.R")
 
 library(data.table) # data structure
-library(tictoc) # time test
-library(praise) # why not?
 library(tidyverse)
 library(ggridges) # additional ridge plotting
 library(ggplot2) # plotting
@@ -49,58 +30,25 @@ library(sf)
 Define helper functions
 
 ```{r include=TRUE}
-# bind data into data table function; works with specific list structure of outputs
-bindDataTable <- function(data) {
-  require(data.table)
-  tr <-
-    lapply(data, function(d) {
-      # simplify list structure
-      d <- unlist(d, recursive = F)
-      # bind together as data table
-      d <- rbindlist(d)
-      return(d)
-    })
-  return(tr)
-}
-
-# for use in subsetting the scenario matrix based on map specifications
-scenario_function <- function(scenario_matrix, 
-                              piled, # will be the same for use and reference 
-                              use_collection, 
-                              use_burn,
-                              ref_collection = "No",
-                              ref_burn,
-                              negate_ref = F){
-  
-  use <- subset(scenario_matrix, Fraction_Piled == piled & 
-           Biomass_Collection == use_collection &
-           Burn_Type == use_burn)
-  
-  # allow for no reference case burn to be explicitly defined
-  if(negate_ref) {
-      ref <- subset(scenario_matrix, Fraction_Piled == piled & 
-             Biomass_Collection == ref_collection &
-             Burn_Type != ref_burn)
-  } else {
-    ref <- subset(scenario_matrix, Fraction_Piled == piled & 
-             Biomass_Collection == ref_collection & 
-             Burn_Type == ref_burn)
-  }
-  
- return(list("use_id" = use$ID, 
-             "ref_id"= ref$ID)) 
-}
-
-## ggplot theme
-mxblsdl <- theme_minimal(base_size = 12) +
-  theme(legend.position = "bottom",
-        #legend.title = element_blank(),
-        strip.text = element_text(size = 12),
-        axis.text = element_text(size = 12),
-        legend.text = element_text(size = 12))
-
 # set the theme for all plots
 theme_set(mxblsdl)
+```
+
+# Setup
+
+Set user defined variables
+
+## Define Scenarios
+
+These are variables that set the definition of the scenario. I could move the functional unit into this
+
+```{r}
+#ref_scen <- "Pile and Broadcast"
+ref_scen <- "None"
+
+# set functional unit
+# funit <- "MTrecovered"
+funit <- "kWh"
 ```
 
 # Load Data
@@ -138,9 +86,6 @@ scen_mat <- fread(scenario_paths[2])
 
 # remove pulp market
 scen_mat[, Pulp_Market := NULL]
-
-# inspect
-head(scen_mat)
 ```
 
 Define the use and reference scenarios It would be good to make a function here since this will be run a number of times...
@@ -220,13 +165,11 @@ data[["poly_num"]] <- poly_num
 ```{r}
 # TODO check on units
 # convert data to correct units; This is the difference between MT and grams
-data <-
-  data %>%
-  mutate(AGTP_co2e_kg = net.MT_CO2e.AGTP.100yr * 1000,
-         AGWP_co2e_kg = net.MT_CO2e.AGWP.100yr * 1000)
-
-# set names for join
-#setnames(data, 'V1', 'polys')
+if(funit == "kWh") {
+  data <-data %>%
+    mutate(AGTP_co2e_kg = net.MT_CO2e.AGTP.100yr * 1000000, # converting MT to kg and kWh to MWh
+           AGWP_co2e_kg = net.MT_CO2e.AGWP.100yr * 1000000)
+}
 
 # rename ID for join
 harvests <- harvests %>%
@@ -249,10 +192,10 @@ Data not being filtered for the maps, but it is being filtered for the histogram
 ## Historgram with nice gradient
 
 ```{r}
-if(ref_scen == "None") {t = "No Burn"} else {t = "Pile and Broadcast"}
+t <- ifelse(ref_scen == "None", "No Burn", "Pile and Broadcast")
 
 # choose metric
-v <- 'net.MT_CO2e.AGTP.100yr' # needs some manual garbage right now
+#v <- 'net.MT_CO2e.AGTP.100yr' # needs some manual garbage right now
 v <- 'net.MT_CO2e.AGWP.100yr'
 
 if(funit == "MTrecovered") {
@@ -265,28 +208,32 @@ if(funit == "MTrecovered") {
        x = expression("MT CO"[2]~"e per MT Recovered"), # dang expression...
        y = "Count") +
   theme(text = element_text(size = 16))  
-} else {
-  g <- data[get(v) < quantile(data[[v]], .97), ] %>% 
+} else { # is kWh
+  # change v since its a different metric for this functional unit
+  v <- ifelse(v == "net.MT_CO2e.AGWP.100yr", 'AGWP_co2e_kg', 'AGTP_co2e_kg')
+  
+  g <- data[get(v) < quantile(data[[v]], .98), ] %>% 
   ggplot(aes(x = get(v), fill = ..x..)) +
   theme_minimal() +
-  geom_histogram(binwidth = .002, show.legend = F) +
+  geom_histogram(binwidth = 4, show.legend = F) +
   scale_fill_gradient(low = "#63B8FF", high = "#CD950C") +
   labs(title = glue::glue("{t} Counterfactul"),
-       x = expression("MT CO"[2]~"e per kWh"), # dang expression...
+       x = expression("kg CO"[2]~"e per MWh"), # dang expression...
        y = "Count") +
   theme(text = element_text(size = 16))  
 }
+g
 ```
 
 # Write out plot
 
-TODO need to add in AGWP, all plots have been AGTP
+Needs Reference scenario, functional unit, and specific metric
 ```{r}
 # Get metric
 metric <- gsub("net.MT_CO2e.", "", v) %>% 
   gsub(".100yr", "", .)
 
-ggsave(plot = g, filename = glue::glue("plots/{t}_{funit}_{metric}.png"),
+ggsave(plot = g, filename = glue::glue("plots/co2e/{t}_{funit}_{metric}.png"),
        height = 7,
        width = 12,
        dpi = 400)
@@ -294,6 +241,7 @@ ggsave(plot = g, filename = glue::glue("plots/{t}_{funit}_{metric}.png"),
 
 # Write for use in QGIS
 
+Need both reference scenarios
 ```{r}
 write_sf(data, 
          glue::glue("Q/input/harvests_{funit}.gpkg"),
@@ -301,179 +249,8 @@ write_sf(data,
          delete_layer = T)
 ```
 
-
-# Prepare Data for maps 4-8
-
-```{r}
-ids <- scenario_function(scenario_matrix = scen_mat,
-                  piled = 50,
-                  use_collection = "All Tech Recoverable",
-                  use_burn = "None",
-                  ref_burn = "None", 
-                  negate_ref = T)
-# special reference for Rx purn
-
-# filter by reference ID
-data <- lapply(files, function(file) {
-  dat <- readRDS(file)
-  da <- dat[grepl(paste0("\\b", ids[["ref_id"]], "\\b", collapse = "|"), names(dat))]
-  return(da)
-})
-# filter by Use ID
-data <- lapply(data, function(d) {
-  da <- d[grepl(paste0("\\b", ids[["use_id"]], "\\b", collapse = "|"), names(d))]
-  return(da)
-})
-
-# simplify list structure
-data <- unlist(data, recursive = F)
-
-# Missing SOX NEED TO EMAIL ABOUT
-out <- lapply(data, function(d) {
-  vals <- d$time_series[, .(net.CH4_MTperMT_Mobilized,
-                            net.N2O_MTperMT_Mobilized,
-                            net.PM2.5_MTperMT_Mobilized,
-                            # Missing SOX
-                            MT_Residue_Mobilized, 
-                            MT_Residue_Mobilized_perAcre)] %>%
-    slice(1)
-  return(vals)
-})
-
-# bind together
-data <- rbindlist(out)
-
-# paste polygon number into
-data[["poly_num"]] <- poly_num
-```
-
-# Spatial Join
-
-```{r}
-# join by polygon ID
-data <- left_join(data, harvests, by = "poly_num")
-```
-
-Filter data based on size of harvest
-
-```{r}
-# filtered_data <- data %>% 
-#   filter(MT_Residue_Mobilized >= 1)
-```
-
-## Output
-
-Prepare the histograms
-```{r}
-if(funit == "MTrecovered") {
-  # string designating reference scenario
-  t = "Prescription Burn"
-  
-  # NOTE need to change xaxis label expression
-  ch4 <- data %>% 
-    filter(net.CH4_MTperMT_Mobilized < quantile(.$net.CH4_MTperMT_Mobilized, .99)) %>% 
-    ggplot(aes(x = net.CH4_MTperMT_Mobilized, fill = ..x..)) +
-    theme_minimal() +
-    geom_histogram(binwidth = .0001, show.legend = F) +
-    scale_fill_gradient(low = "#63B8FF", high = "#CD950C") +
-    labs(title = glue::glue("{t} Counterfactul"),
-         x = expression("MT CH"[4]~" per MT Recovered"),
-         y = "Count") +
-    theme(text = element_text(size = 16))
-  
-  n2o <- data %>% 
-    filter(net.N2O_MTperMT_Mobilized < quantile(.$net.N2O_MTperMT_Mobilized, .99)) %>% 
-    ggplot(aes(x = net.N2O_MTperMT_Mobilized, fill = ..x..)) +
-    theme_minimal() +
-    geom_histogram(binwidth = .000001, show.legend = F) +
-    scale_fill_gradient(low = "#63B8FF", high = "#CD950C") +
-    labs(title = glue::glue("{t} Counterfactul"),
-         x = expression("MT N"[2]~"O per MT Recovered"),
-         y = "Count") +
-    theme(text = element_text(size = 16))
-  
-  pm25 <- data %>% 
-    filter(net.PM2.5_MTperMT_Mobilized < quantile(.$net.PM2.5_MTperMT_Mobilized, .99)) %>% 
-    ggplot(aes(x = net.PM2.5_MTperMT_Mobilized, fill = ..x..)) +
-    theme_minimal() +
-    geom_histogram(binwidth = .0001, show.legend = F) +
-    scale_fill_gradient(low = "#63B8FF", high = "#CD950C") +
-    labs(title = glue::glue("{t} Counterfactul"),
-         x = expression("MT PM 2.5 per MT Recovered"),
-         y = "Count") +
-    theme(text = element_text(size = 16))  
-} else {
-  # string designating reference scenario
-  t = "Prescription Burn"
-  
-  # NOTE need to change xaxis label expression
-  ch4 <- data %>% 
-    filter(net.CH4_MTperMT_Mobilized < quantile(.$net.CH4_MTperMT_Mobilized, .99)) %>% 
-    ggplot(aes(x = net.CH4_MTperMT_Mobilized, fill = ..x..)) +
-    theme_minimal() +
-    geom_histogram(binwidth = .0001, show.legend = F) +
-    scale_fill_gradient(low = "#63B8FF", high = "#CD950C") +
-    labs(title = glue::glue("{t} Counterfactul"),
-         x = expression("MT CH"[4]~" per MT kWh"),
-         y = "Count") +
-    theme(text = element_text(size = 16))
-  
-  n2o <- data %>% 
-    filter(net.N2O_MTperMT_Mobilized < quantile(.$net.N2O_MTperMT_Mobilized, .99)) %>% 
-    ggplot(aes(x = net.N2O_MTperMT_Mobilized, fill = ..x..)) +
-    theme_minimal() +
-    geom_histogram(binwidth = .000001, show.legend = F) +
-    scale_fill_gradient(low = "#63B8FF", high = "#CD950C") +
-    labs(title = glue::glue("{t} Counterfactul"),
-         x = expression("MT N"[2]~"O per MT kWh"),
-         y = "Count") +
-    theme(text = element_text(size = 16))
-  
-  pm25 <- data %>% 
-    filter(net.PM2.5_MTperMT_Mobilized < quantile(.$net.PM2.5_MTperMT_Mobilized, .99)) %>% 
-    ggplot(aes(x = net.PM2.5_MTperMT_Mobilized, fill = ..x..)) +
-    theme_minimal() +
-    geom_histogram(binwidth = .0001, show.legend = F) +
-    scale_fill_gradient(low = "#63B8FF", high = "#CD950C") +
-    labs(title = glue::glue("{t} Counterfactul"),
-         x = expression("MT PM 2.5 per MT kWh"),
-         y = "Count") +
-    theme(text = element_text(size = 16))
-}
-```
-
-# Write out plot
-
-```{r}
-ggsave(plot = ch4, filename = glue::glue("plots/ch4_{funit}.png"),
-       height = 7,
-       width = 12,
-       dpi = 400)
-
-ggsave(plot = n2o, filename = glue::glue("plots/n2o_{funit}.png"),
-       height = 7,
-       width = 12,
-       dpi = 400)
-
-ggsave(plot = pm25, filename = glue::glue("plots/pm25_{funit}.png"),
-       height = 7,
-       width = 12,
-       dpi = 400)
-```
-
-Write the layers to Qgis
-```{r}
-write_sf(data, 
-         glue::glue("Q/input/harvests_{funit}.gpkg"),
-         layer = "criteriants",
-         delete_layer = T)
-```
-
-# check layers
+Check on what layers already exist
 ```{r}
 st_layers(glue::glue("Q/input/harvests_{funit}.gpkg"))
 ```
 
-
-## TODO
-Need to add in the code to generate the ten year averages...
