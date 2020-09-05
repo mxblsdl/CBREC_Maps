@@ -1,0 +1,238 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+# TODO add setup 
+
+```{r setup, include=FALSE}
+knitr::opts_knit$set(root.dir = rprojroot::find_rstudio_root_file())
+source("R/CBI_mapCreation.R")
+theme_set(mxblsdl)
+
+library(data.table) # data structure
+library(tidyverse)
+library(ggridges) # additional ridge plotting
+library(ggplot2) # plotting
+library(sf)
+```
+
+# Setup
+
+```{r}
+# set functional unit
+# funit <- "MTrecovered"
+funit <- "kWh"
+```
+
+# Load Data
+
+First find the model results which are classified by the 'metric', either kWh or MT Recovered. Using MT Recovered per Kevin's email.
+
+Using `MTrecovered` as the functional unit. This may change to be functional unit `kWh` as well.
+```{r include=TRUE}
+# find all results files
+files <- dir(glue::glue("CBREC_Model_Output/{funit}"), full.names = T, recursive = T)
+
+sf_path <- dir("CBREC-LCA_timber_activity_polygons_2016-2019", pattern = ".shp$", full.names = T)
+harvests <- read_sf(sf_path)
+```
+
+## Scenario data
+
+This includes the scenario pairings and the scenario IDs
+
+```{r}
+scenario_paths <- dir("inst", full.names = T)
+
+scen_pairings <- fread(scenario_paths[1])
+scen_mat <- fread(scenario_paths[2])
+
+# remove pulp market
+scen_mat[, Pulp_Market := NULL]
+```
+
+# Prepare Data for maps 4-8
+
+```{r}
+ids <- scenario_function(scenario_matrix = scen_mat,
+                  piled = 50,
+                  use_collection = "All Tech Recoverable",
+                  use_burn = "None",
+                  ref_burn = "None", 
+                  negate_ref = T)
+# special reference for Rx purn
+
+# filter by reference ID
+data <- lapply(files, function(file) {
+  dat <- readRDS(file)
+  da <- dat[grepl(paste0("\\b", ids[["ref_id"]], "\\b", collapse = "|"), names(dat))]
+  return(da)
+})
+# filter by Use ID
+data <- lapply(data, function(d) {
+  da <- d[grepl(paste0("\\b", ids[["use_id"]], "\\b", collapse = "|"), names(d))]
+  return(da)
+})
+
+# simplify list structure
+data <- unlist(data, recursive = F)
+
+# Missing SOX NEED TO EMAIL ABOUT
+out <- lapply(data, function(d) {
+  vals <- d$time_series[, .(net.CH4_MTperkWh,
+                            net.N2O_MTperkWh,
+                            net.PM2.5_MTperkWh,
+                            # Missing SOX
+                            MT_Residue_Mobilized, 
+                            MT_Residue_Mobilized_perAcre)] %>%
+    slice(1)
+  return(vals)
+})
+
+# bind together
+data <- rbindlist(out)
+```
+
+Paste polygon number into
+```{r}
+poly_num <- tools::file_path_sans_ext(gsub(".*/", "", unlist(files)))
+
+data[["poly_num"]] <- poly_num
+```
+
+# Spatial Join
+
+```{r}
+# rename ID for join
+harvests <- harvests %>%
+      rename(poly_num = OBJECTID) %>%
+      mutate(poly_num = as.character(poly_num))
+
+# join by polygon ID
+data <- left_join(data, harvests, by = "poly_num")
+```
+
+
+Change the units if the functional unit is kWh. The final units should be kg / MWh
+```{r}
+if(funit == "kWh") {
+  data <- data %>%
+    mutate(N2O_kg = net.N2O_MTperkWh * 1000000, # converting MT to kg and kWh to MWh
+           CH4_kg = net.CH4_MTperkWh * 1000000,
+           PM25_kg = net.PM2.5_MTperkWh * 1000000)
+}
+```
+
+## Output
+
+Prepare the histograms
+```{r}
+# string designating reference scenario
+  t = "Prescription Burn"
+
+if(funit == "MTrecovered") {
+  # NOTE need to change xaxis label expression
+  ch4 <- data %>% 
+    filter(net.CH4_MTperMT_Mobilized < quantile(.$net.CH4_MTperMT_Mobilized, .99)) %>% 
+    ggplot(aes(x = net.CH4_MTperMT_Mobilized, fill = ..x..)) +
+    theme_minimal() +
+    geom_histogram(binwidth = .0001, show.legend = F) +
+    scale_fill_gradient(low = "#63B8FF", high = "#CD950C") +
+    labs(title = glue::glue("{t} Counterfactul"),
+         x = expression("MT CH"[4]~" per MT Recovered"),
+         y = "Count") +
+    theme(text = element_text(size = 16))
+  
+  n2o <- data %>% 
+    filter(net.N2O_MTperMT_Mobilized < quantile(.$net.N2O_MTperMT_Mobilized, .99)) %>% 
+    ggplot(aes(x = net.N2O_MTperMT_Mobilized, fill = ..x..)) +
+    theme_minimal() +
+    geom_histogram(binwidth = .000001, show.legend = F) +
+    scale_fill_gradient(low = "#63B8FF", high = "#CD950C") +
+    labs(title = glue::glue("{t} Counterfactul"),
+         x = expression("MT N"[2]~"O per MT Recovered"),
+         y = "Count") +
+    theme(text = element_text(size = 16))
+  
+  pm25 <- data %>% 
+    filter(net.PM2.5_MTperMT_Mobilized < quantile(.$net.PM2.5_MTperMT_Mobilized, .99)) %>% 
+    ggplot(aes(x = net.PM2.5_MTperMT_Mobilized, fill = ..x..)) +
+    theme_minimal() +
+    geom_histogram(binwidth = .0001, show.legend = F) +
+    scale_fill_gradient(low = "#63B8FF", high = "#CD950C") +
+    labs(title = glue::glue("{t} Counterfactul"),
+         x = expression("MT PM 2.5 per MT Recovered"),
+         y = "Count") +
+    theme(text = element_text(size = 16))  
+} else {
+  # NOTE need to change xaxis label expression
+  ch4 <- data %>% 
+    filter(CH4_kg < quantile(.$CH4_kg, .99)) %>% 
+    ggplot(aes(x = CH4_kg, fill = ..x..)) +
+    theme_minimal() +
+    geom_histogram(binwidth = .05, show.legend = F) +
+    scale_fill_gradient(low = "#63B8FF", high = "#CD950C") +
+    labs(title = glue::glue("{t} Counterfactul"),
+         x = expression("MT CH"[4]~" per MT kWh"),
+         y = "Count") +
+    theme(text = element_text(size = 16))
+
+n2o <- data %>% 
+    filter(N2O_kg < quantile(.$N2O_kg, .99)) %>% 
+    ggplot(aes(x = N2O_kg, fill = ..x..)) +
+    theme_minimal() +
+    geom_histogram(binwidth = .001, show.legend = F) +
+    scale_fill_gradient(low = "#63B8FF", high = "#CD950C") +
+    labs(title = glue::glue("{t} Counterfactul"),
+         x = expression("MT N"[2]~"O per MT kWh"),
+         y = "Count") +
+    theme(text = element_text(size = 16))
+
+pm25 <- data %>% 
+    filter(PM25_kg < quantile(.$PM25_kg, .99)) %>% 
+    ggplot(aes(x = PM25_kg, fill = ..x..)) +
+    theme_minimal() +
+    geom_histogram(binwidth = .08, show.legend = F) +
+    scale_fill_gradient(low = "#63B8FF", high = "#CD950C") +
+    labs(title = glue::glue("{t} Counterfactul"),
+         x = expression("MT PM 2.5 per MT kWh"),
+         y = "Count") +
+    theme(text = element_text(size = 16))
+}
+```
+
+# Write out plot
+
+```{r}
+ggsave(plot = ch4, filename = glue::glue("plots/ch4_{funit}.png"),
+       height = 7,
+       width = 12,
+       dpi = 400)
+
+ggsave(plot = n2o, filename = glue::glue("plots/n2o_{funit}.png"),
+       height = 7,
+       width = 12,
+       dpi = 400)
+
+ggsave(plot = pm25, filename = glue::glue("plots/pm25_{funit}.png"),
+       height = 7,
+       width = 12,
+       dpi = 400)
+```
+
+Write the layers to Qgis
+```{r}
+write_sf(data, 
+         glue::glue("Q/input/harvests_{funit}.gpkg"),
+         layer = "criteriants",
+         delete_layer = T)
+```
+
+# check layers
+```{r}
+st_layers(glue::glue("Q/input/harvests_{funit}.gpkg"))
+```
+
+
+## TODO
+Need to add in the code to generate the ten year averages...
