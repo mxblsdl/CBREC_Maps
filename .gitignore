@@ -10,4 +10,6 @@ input/
 output/
 invoices/
 plots/
-Q
+Q/
+*.png
+CBREC-LCA_timber_activity_polygons_2016-2019/
